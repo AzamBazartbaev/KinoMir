@@ -28,10 +28,85 @@ function movieCard(movie) {
   return `<a class="card" href="#/movie/${encodeURIComponent(movie.slug)}">${poster(movie)}<h3>${esc(movie.title)}</h3><div class="card-meta"><div class="meta">${movie.year} · ${esc(movie.country)}</div><div class="rating">${rating}</div></div></a>`;
 }
 
-function bindFeaturedMovie() {
-  document.querySelectorAll('button[data-slug]').forEach(button => {
-    button.onclick = () => location.hash = `#/movie/${encodeURIComponent(button.dataset.slug)}`;
-  });
+const HOME_COLLECTIONS = [
+  {id: 'popular', title: 'Популярное', eyebrow: 'Смотрят сейчас', sort: 'popular'},
+  {id: 'newest', title: 'Новинки', eyebrow: 'Свежие поступления', sort: 'newest'},
+  {id: 'rating', title: 'Высокий рейтинг', eyebrow: 'Выбор зрителей', sort: 'rating'},
+];
+
+function skeletonCards(count = 6) {
+  return Array.from({length: count}, () => `
+    <div class="card-skeleton" aria-hidden="true">
+      <div class="skeleton skeleton-poster"></div>
+      <div class="skeleton skeleton-title"></div>
+      <div class="skeleton skeleton-meta"></div>
+    </div>`).join('');
+}
+
+function homeShell() {
+  return `
+    <section class="hero hero-skeleton" id="home-hero" aria-busy="true" aria-label="Загружается рекомендуемый фильм">
+      <div class="hero-content">
+        <div class="skeleton skeleton-kicker"></div>
+        <div class="skeleton skeleton-heading"></div>
+        <div class="skeleton skeleton-copy"></div>
+        <div class="skeleton skeleton-button"></div>
+      </div>
+    </section>
+    <div class="home-collections">
+      ${HOME_COLLECTIONS.map(collection => `
+        <section class="section collection" aria-labelledby="${collection.id}-title">
+          <div class="section-head">
+            <div><div class="eyebrow">${collection.eyebrow}</div><h2 id="${collection.id}-title">${collection.title}</h2></div>
+            <a href="#/catalog">Весь каталог →</a>
+          </div>
+          <div class="grid" id="${collection.id}-grid" aria-live="polite" aria-busy="true">${skeletonCards()}</div>
+        </section>`).join('')}
+    </div>`;
+}
+
+function renderHero(movie) {
+  const target = document.querySelector('#home-hero');
+  if (!movie) {
+    target.className = 'hero hero-empty';
+    target.removeAttribute('aria-busy');
+    target.setAttribute('aria-label', 'Рекомендуемый фильм пока не выбран');
+    target.innerHTML = '<div class="hero-content"><div class="eyebrow">Выбор редакции</div><h1>Скоро здесь будет премьера</h1><p>Добавьте опубликованный фильм, чтобы он появился на главной странице.</p><a class="btn secondary" href="#/catalog">Открыть каталог</a></div>';
+    return;
+  }
+
+  const heroImage = movie.banner || movie.poster;
+  target.className = 'hero';
+  target.removeAttribute('aria-busy');
+  target.removeAttribute('aria-label');
+  if (heroImage) target.style.setProperty('--hero-image', `url("${heroImage.replace(/["\\]/g, '\\$&')}")`);
+  target.innerHTML = `<div class="hero-content"><div class="eyebrow">Выбор редакции</div><h1>${esc(movie.title)}</h1><div class="hero-meta"><span>${movie.year}</span><span>${esc(movie.country)}</span><span>${esc(movie.age_rating || '0+')}</span>${movie.rating_avg ? `<span>★ ${Number(movie.rating_avg).toFixed(1)}</span>` : ''}</div><p>${esc(movie.description)}</p><a class="btn" href="#/movie/${encodeURIComponent(movie.slug)}">Смотреть подробнее</a></div>`;
+}
+
+function renderCollection(collection, result) {
+  const target = document.querySelector(`#${collection.id}-grid`);
+  if (!target) return;
+  target.removeAttribute('aria-busy');
+
+  if (result.status === 'rejected') {
+    target.innerHTML = `<div class="collection-state"><strong>Не удалось загрузить подборку</strong><span>${esc(result.reason.message)}</span><button class="btn secondary" data-retry="${collection.id}">Повторить</button></div>`;
+    target.querySelector('[data-retry]')?.addEventListener('click', () => loadCollection(collection));
+    return;
+  }
+
+  const movies = result.value.results.slice(0, 6);
+  target.innerHTML = movies.length
+    ? movies.map(movieCard).join('')
+    : '<div class="collection-state"><strong>Здесь пока нет фильмов</strong><span>Подборка появится после добавления фильмов в каталог.</span></div>';
+}
+
+async function loadCollection(collection) {
+  const target = document.querySelector(`#${collection.id}-grid`);
+  if (!target) return;
+  target.setAttribute('aria-busy', 'true');
+  target.innerHTML = skeletonCards();
+  const result = await Promise.allSettled([api(`/movies/?sort=${collection.sort}`)]);
+  renderCollection(collection, result[0]);
 }
 
 function setAuthControls() {
@@ -45,11 +120,11 @@ function setAuthControls() {
 }
 
 async function home() {
-  const data = await api('/movies/?sort=popular');
-  const movies = data.results; const hero = movies.find(x => x.is_featured) || movies[0];
-  const heroImage = hero?.poster ? `style="--hero-image:url('${esc(hero.poster)}')"` : '';
-  app.innerHTML = hero ? `<section class="hero" ${heroImage}><div class="hero-content"><div class="eyebrow">Выбор редакции</div><h1>${esc(hero.title)}</h1><div class="hero-meta"><span>${hero.year}</span><span>${esc(hero.country)}</span><span>${esc(hero.age_rating || '0+')}</span>${hero.rating_avg ? `<span>★ ${Number(hero.rating_avg).toFixed(1)}</span>` : ''}</div><p>${esc(hero.description)}</p><button class="btn" data-slug="${esc(hero.slug)}">Смотреть подробнее</button></div></section><section class="section"><div class="section-head"><h2>Популярные фильмы</h2><a href="#/catalog">Весь каталог →</a></div><div class="grid">${movies.slice(0,6).map(movieCard).join('')}</div></section>` : '<div class="empty">Каталог пока пуст</div>';
-  bindFeaturedMovie();
+  app.innerHTML = homeShell();
+  const results = await Promise.allSettled(HOME_COLLECTIONS.map(collection => api(`/movies/?sort=${collection.sort}`)));
+  const popularMovies = results[0].status === 'fulfilled' ? results[0].value.results : [];
+  renderHero(popularMovies.find(movie => movie.is_featured) || popularMovies[0]);
+  HOME_COLLECTIONS.forEach((collection, index) => renderCollection(collection, results[index]));
 }
 
 async function catalog() {
