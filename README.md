@@ -16,10 +16,10 @@ docker compose up --build
 После запуска:
 
 - Frontend: http://localhost:3000
-- REST API: http://localhost:8000/api/
-- Swagger UI: http://localhost:8000/api/docs/
-- OpenAPI schema: http://localhost:8000/api/schema/
-- Django Admin: http://localhost:8000/admin/
+- REST API: http://localhost:8001/api/
+- Swagger UI: http://localhost:8001/api/docs/
+- OpenAPI schema: http://localhost:8001/api/schema/
+- Django Admin: http://localhost:8001/admin/
 
 При старте автоматически выполняются миграции, создаются демонстрационные фильмы и администратор. Логин и пароль берутся из `.env` (`admin` / `admin12345` в примере).
 
@@ -69,4 +69,3 @@ python manage.py test
 ```
 
 Frontend можно открыть через любой статический HTTP-сервер; при локальном запуске `config.js` автоматически использует `http://localhost:8000/api`.
-

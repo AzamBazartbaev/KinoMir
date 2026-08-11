@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="description" content="КиноМир — каталог фильмов">
+  <meta name="theme-color" content="#101311">
   <title>КиноМир</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -12,16 +13,15 @@
 </head>
 <body>
   <header class="header">
-    <a class="brand" href="#/">КИНО<span>МИР</span></a>
-    <nav aria-label="Основная навигация">
-      <a href="#/">Главная</a><a href="#/catalog">Каталог</a><a href="#/favorites">Избранное</a>
+    <a class="brand" href="#/" aria-label="КиноМир — главная"><i></i>КИНО<span>МИР</span></a>
+    <nav class="main-nav" aria-label="Основная навигация">
+      <a href="#/" data-route="home">Главная</a><a href="#/catalog" data-route="catalog">Каталог</a><a href="#/favorites" data-route="favorites">Избранное</a>
     </nav>
     <div id="auth-controls"></div>
   </header>
   <main id="app" tabindex="-1"><div class="loader">Загружаем кино…</div></main>
-  <footer><strong>КиноМир</strong><span>Учебный каталог легальных источников фильмов</span></footer>
+  <footer><div><strong>КИНО<span>МИР</span></strong><p>Истории, к которым хочется возвращаться.</p></div><span>Учебный каталог легальных источников фильмов</span></footer>
   <div id="toast" role="status" aria-live="polite"></div>
   <script src="config.js"></script><script src="app.js"></script>
 </body>
 </html>
-

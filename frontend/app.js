@@ -23,8 +23,8 @@ function poster(movie) {
 }
 
 function movieCard(movie) {
-  const rating = movie.rating_avg ? `★ ${Number(movie.rating_avg).toFixed(1)}` : 'Нет оценок';
-  return `<article class="card" data-slug="${esc(movie.slug)}" tabindex="0">${poster(movie)}<h3>${esc(movie.title)}</h3><div class="meta">${movie.year} · ${esc(movie.country)} · ${rating}</div></article>`;
+  const rating = movie.rating_avg ? `★ ${Number(movie.rating_avg).toFixed(1)}` : 'Без оценки';
+  return `<article class="card" data-slug="${esc(movie.slug)}" tabindex="0">${poster(movie)}<h3>${esc(movie.title)}</h3><div class="card-meta"><div class="meta">${movie.year} · ${esc(movie.country)}</div><div class="rating">${rating}</div></div></article>`;
 }
 
 function bindCards() {
@@ -47,7 +47,8 @@ function setAuthControls() {
 async function home() {
   const data = await api('/movies/?sort=popular');
   const movies = data.results; const hero = movies.find(x => x.is_featured) || movies[0];
-  app.innerHTML = hero ? `<section class="hero"><div class="hero-content"><div class="eyebrow">Смотрите сегодня</div><h1>${esc(hero.title)}</h1><p>${esc(hero.description)}</p><button class="btn" data-slug="${esc(hero.slug)}">Подробнее о фильме</button></div></section><section class="section"><div class="section-head"><h2>Популярные фильмы</h2><a href="#/catalog">Весь каталог →</a></div><div class="grid">${movies.slice(0,6).map(movieCard).join('')}</div></section>` : '<div class="empty">Каталог пока пуст</div>';
+  const heroImage = hero?.poster ? `style="--hero-image:url('${esc(hero.poster)}')"` : '';
+  app.innerHTML = hero ? `<section class="hero" ${heroImage}><div class="hero-content"><div class="eyebrow">Выбор редакции</div><h1>${esc(hero.title)}</h1><div class="hero-meta"><span>${hero.year}</span><span>${esc(hero.country)}</span><span>${hero.age_rating || '0+'}</span>${hero.rating_avg ? `<span>★ ${Number(hero.rating_avg).toFixed(1)}</span>` : ''}</div><p>${esc(hero.description)}</p><button class="btn" data-slug="${esc(hero.slug)}">Смотреть подробнее</button></div></section><section class="section"><div class="section-head"><h2>Популярные фильмы</h2><a href="#/catalog">Весь каталог →</a></div><div class="grid">${movies.slice(0,6).map(movieCard).join('')}</div></section>` : '<div class="empty">Каталог пока пуст</div>';
   bindCards();
 }
 
@@ -92,8 +93,9 @@ async function favorites() {
 
 async function router() {
   app.innerHTML='<div class="loader">Загружаем кино…</div>'; const parts=location.hash.replace(/^#\/?/,'').split('/');
+  const route = parts[0] || 'home';
+  document.querySelectorAll('[data-route]').forEach(link => link.classList.toggle('active', link.dataset.route === route));
   try { if(parts[0]==='catalog') await catalog(); else if(parts[0]==='movie') await movie(decodeURIComponent(parts[1])); else if(parts[0]==='login'||parts[0]==='register') authPage(parts[0]); else if(parts[0]==='favorites') await favorites(); else await home(); app.focus(); } catch(error) { app.innerHTML=`<div class="empty"><h2>Не удалось загрузить страницу</h2><p>${esc(error.message)}</p></div>`; }
 }
 
 setAuthControls(); window.addEventListener('hashchange',router); router();
-
