@@ -6,6 +6,8 @@
 - `frontend/` — статическое SPA на HTML/CSS/Vanilla JS, которое получает все данные только через REST API;
 - `docker-compose.yml` — контейнеры backend и frontend с постоянными volumes для БД и media.
 
+В Docker frontend проксирует запросы `/api/` во внутренний контейнер backend, поэтому браузеру достаточно открыть только порт `3000`.
+
 ## Запуск через Docker
 
 ```bash
