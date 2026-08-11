@@ -1,0 +1,810 @@
+openapi: 3.0.3
+info:
+  title: КиноМир API
+  version: 1.0.0
+  description: REST API каталога фильмов
+paths:
+  /api/auth/login/:
+    post:
+      operationId: auth_login_create
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Login'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Login'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Login'
+        required: true
+      security:
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+          description: ''
+  /api/auth/logout/:
+    post:
+      operationId: auth_logout_create
+      tags:
+      - auth
+      security:
+      - tokenAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/auth/me/:
+    get:
+      operationId: auth_me_retrieve
+      tags:
+      - auth
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+  /api/auth/register/:
+    post:
+      operationId: auth_register_create
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Register'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Register'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Register'
+        required: true
+      security:
+      - tokenAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+          description: ''
+  /api/favorites/:
+    get:
+      operationId: favorites_list
+      tags:
+      - favorites
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MovieList'
+          description: ''
+  /api/genres/:
+    get:
+      operationId: genres_list
+      tags:
+      - genres
+      security:
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Genre'
+          description: ''
+  /api/health/:
+    get:
+      operationId: health_retrieve
+      tags:
+      - health
+      security:
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+          description: ''
+  /api/movies/:
+    get:
+      operationId: movies_list
+      parameters:
+      - in: query
+        name: age_rating
+        schema:
+          type: string
+        description: Возрастной рейтинг
+      - in: query
+        name: country
+        schema:
+          type: string
+        description: Страна (точное совпадение)
+      - in: query
+        name: genre
+        schema:
+          type: string
+        description: Slug жанра
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: Номер страницы
+      - in: query
+        name: q
+        schema:
+          type: string
+        description: Поиск по названию, описанию, режиссёру и актёрам
+      - in: query
+        name: sort
+        schema:
+          type: string
+          enum:
+          - newest
+          - popular
+          - rating
+          - title
+          - year_asc
+          - year_desc
+      - in: query
+        name: year
+        schema:
+          type: integer
+        description: Год выпуска
+      tags:
+      - movies
+      security:
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedMovieListList'
+          description: ''
+  /api/movies/{slug}/:
+    get:
+      operationId: movies_retrieve
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - movies
+      security:
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MovieDetail'
+          description: ''
+  /api/movies/{slug}/comments/:
+    post:
+      operationId: movies_comments_create
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - movies
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommentRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CommentRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CommentRequest'
+        required: true
+      security:
+      - tokenAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommentCreateResponse'
+          description: ''
+  /api/movies/{slug}/favorite/:
+    post:
+      operationId: movies_favorite_create
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - movies
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FavoriteResponse'
+          description: ''
+  /api/movies/{slug}/rating/:
+    put:
+      operationId: movies_rating_update
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - movies
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RatingRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RatingRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RatingRequest'
+        required: true
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RatingResponse'
+          description: ''
+  /api/schema/:
+    get:
+      operationId: schema_retrieve
+      description: |-
+        OpenApi3 schema for this API. Format can be selected via content negotiation.
+
+        - YAML: application/vnd.oai.openapi
+        - JSON: application/vnd.oai.openapi+json
+      parameters:
+      - in: query
+        name: format
+        schema:
+          type: string
+          enum:
+          - json
+          - yaml
+      - in: query
+        name: lang
+        schema:
+          type: string
+          enum:
+          - af
+          - ar
+          - ar-dz
+          - ast
+          - az
+          - be
+          - bg
+          - bn
+          - br
+          - bs
+          - ca
+          - ckb
+          - cs
+          - cy
+          - da
+          - de
+          - dsb
+          - el
+          - en
+          - en-au
+          - en-gb
+          - eo
+          - es
+          - es-ar
+          - es-co
+          - es-mx
+          - es-ni
+          - es-ve
+          - et
+          - eu
+          - fa
+          - fi
+          - fr
+          - fy
+          - ga
+          - gd
+          - gl
+          - he
+          - hi
+          - hr
+          - hsb
+          - hu
+          - hy
+          - ia
+          - id
+          - ig
+          - io
+          - is
+          - it
+          - ja
+          - ka
+          - kab
+          - kk
+          - km
+          - kn
+          - ko
+          - ky
+          - lb
+          - lt
+          - lv
+          - mk
+          - ml
+          - mn
+          - mr
+          - ms
+          - my
+          - nb
+          - ne
+          - nl
+          - nn
+          - os
+          - pa
+          - pl
+          - pt
+          - pt-br
+          - ro
+          - ru
+          - sk
+          - sl
+          - sq
+          - sr
+          - sr-latn
+          - sv
+          - sw
+          - ta
+          - te
+          - tg
+          - th
+          - tk
+          - tr
+          - tt
+          - udm
+          - ug
+          - uk
+          - ur
+          - uz
+          - vi
+          - zh-hans
+          - zh-hant
+      tags:
+      - schema
+      security:
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/vnd.oai.openapi:
+              schema:
+                type: object
+                additionalProperties: {}
+            application/yaml:
+              schema:
+                type: object
+                additionalProperties: {}
+            application/vnd.oai.openapi+json:
+              schema:
+                type: object
+                additionalProperties: {}
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+components:
+  schemas:
+    AuthResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        user:
+          $ref: '#/components/schemas/User'
+      required:
+      - token
+      - user
+    CommentCreateResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+        text:
+          type: string
+        username:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+      required:
+      - created_at
+      - id
+      - text
+      - username
+    CommentRequest:
+      type: object
+      properties:
+        text:
+          type: string
+          maxLength: 1000
+      required:
+      - text
+    FavoriteResponse:
+      type: object
+      properties:
+        is_favorite:
+          type: boolean
+      required:
+      - is_favorite
+    Genre:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          title: Название
+          maxLength: 100
+        slug:
+          type: string
+          pattern: ^[-\w]+$
+          maxLength: 50
+        description:
+          type: string
+        image:
+          type: string
+          format: uri
+          nullable: true
+      required:
+      - id
+      - name
+      - slug
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+      - status
+    Login:
+      type: object
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+          writeOnly: true
+      required:
+      - password
+      - username
+    MovieDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        title:
+          type: string
+          title: Название
+          maxLength: 255
+        original_title:
+          type: string
+          maxLength: 255
+        slug:
+          type: string
+          pattern: ^[-\w]+$
+          maxLength: 50
+        description:
+          type: string
+        year:
+          type: integer
+          maximum: 2100
+          minimum: 1888
+        country:
+          type: string
+          maxLength: 100
+        duration:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          description: Минуты
+        age_rating:
+          type: string
+          maxLength: 10
+        genres:
+          type: array
+          items:
+            $ref: '#/components/schemas/Genre'
+          readOnly: true
+        poster:
+          type: string
+          format: uri
+          nullable: true
+        banner:
+          type: string
+          format: uri
+          nullable: true
+        is_featured:
+          type: boolean
+        views_count:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        rating_avg:
+          type: number
+          format: double
+          readOnly: true
+          nullable: true
+        ratings_count:
+          type: integer
+          readOnly: true
+        is_favorite:
+          type: boolean
+          readOnly: true
+        director:
+          type: string
+          maxLength: 255
+        actors:
+          type: string
+        trailer_url:
+          oneOf:
+          - type: string
+            format: uri
+            maxLength: 200
+          - type: string
+            maxLength: 0
+        player:
+          type: object
+          additionalProperties: {}
+          readOnly: true
+        comments:
+          type: array
+          items: {}
+          readOnly: true
+        user_rating:
+          type: integer
+          nullable: true
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - comments
+      - country
+      - created_at
+      - description
+      - duration
+      - genres
+      - id
+      - is_favorite
+      - player
+      - rating_avg
+      - ratings_count
+      - slug
+      - title
+      - user_rating
+      - year
+    MovieList:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        title:
+          type: string
+          title: Название
+          maxLength: 255
+        original_title:
+          type: string
+          maxLength: 255
+        slug:
+          type: string
+          pattern: ^[-\w]+$
+          maxLength: 50
+        description:
+          type: string
+        year:
+          type: integer
+          maximum: 2100
+          minimum: 1888
+        country:
+          type: string
+          maxLength: 100
+        duration:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          description: Минуты
+        age_rating:
+          type: string
+          maxLength: 10
+        genres:
+          type: array
+          items:
+            $ref: '#/components/schemas/Genre'
+          readOnly: true
+        poster:
+          type: string
+          format: uri
+          nullable: true
+        banner:
+          type: string
+          format: uri
+          nullable: true
+        is_featured:
+          type: boolean
+        views_count:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        rating_avg:
+          type: number
+          format: double
+          readOnly: true
+          nullable: true
+        ratings_count:
+          type: integer
+          readOnly: true
+        is_favorite:
+          type: boolean
+          readOnly: true
+      required:
+      - country
+      - description
+      - duration
+      - genres
+      - id
+      - is_favorite
+      - rating_avg
+      - ratings_count
+      - slug
+      - title
+      - year
+    PaginatedMovieListList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/MovieList'
+    RatingRequest:
+      type: object
+      properties:
+        value:
+          type: integer
+          maximum: 5
+          minimum: 1
+      required:
+      - value
+    RatingResponse:
+      type: object
+      properties:
+        value:
+          type: integer
+      required:
+      - value
+    Register:
+      type: object
+      properties:
+        username:
+          type: string
+          title: Имя пользователя
+          description: Обязательное поле. Не более 150 символов. Только буквы, цифры
+            и символы @/./+/-/_.
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        email:
+          title: Адрес электронной почты
+          oneOf:
+          - type: string
+            format: email
+            maxLength: 254
+          - type: string
+            maxLength: 0
+        password:
+          type: string
+          writeOnly: true
+      required:
+      - password
+      - username
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        username:
+          type: string
+          title: Имя пользователя
+          description: Обязательное поле. Не более 150 символов. Только буквы, цифры
+            и символы @/./+/-/_.
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        email:
+          title: Адрес электронной почты
+          oneOf:
+          - type: string
+            format: email
+            maxLength: 254
+          - type: string
+            maxLength: 0
+        date_joined:
+          type: string
+          format: date-time
+          title: Дата регистрации
+      required:
+      - id
+      - username
+  securitySchemes:
+    tokenAuth:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: Token-based authentication with required prefix "Token"

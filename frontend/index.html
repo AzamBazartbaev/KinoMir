@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="КиноМир — каталог фильмов">
+  <title>КиноМир</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="header">
+    <a class="brand" href="#/">КИНО<span>МИР</span></a>
+    <nav aria-label="Основная навигация">
+      <a href="#/">Главная</a><a href="#/catalog">Каталог</a><a href="#/favorites">Избранное</a>
+    </nav>
+    <div id="auth-controls"></div>
+  </header>
+  <main id="app" tabindex="-1"><div class="loader">Загружаем кино…</div></main>
+  <footer><strong>КиноМир</strong><span>Учебный каталог легальных источников фильмов</span></footer>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script src="config.js"></script><script src="app.js"></script>
+</body>
+</html>
+
