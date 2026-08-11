@@ -1,4 +1,5 @@
-const API = window.KINOMIR_API_URL.includes('__') ? 'http://localhost:8000/api' : window.KINOMIR_API_URL;
+const configuredApi = window.KINOMIR_API_URL || '/api';
+const API = (configuredApi.includes('__') ? 'http://localhost:8000/api' : configuredApi).replace(/\/$/, '');
 const app = document.querySelector('#app');
 const token = () => localStorage.getItem('kinomir_token');
 const esc = value => String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
@@ -19,18 +20,17 @@ function toast(message) {
 }
 
 function poster(movie) {
-  return `<div class="poster">${movie.poster ? `<img src="${esc(movie.poster)}" alt="Постер: ${esc(movie.title)}">` : `<span class="placeholder">${esc(movie.title.slice(0,1))}</span>`}<span class="badge">${movie.age_rating || '0+'}</span></div>`;
+  return `<div class="poster">${movie.poster ? `<img src="${esc(movie.poster)}" alt="Постер: ${esc(movie.title)}">` : `<span class="placeholder">${esc(movie.title.slice(0,1))}</span>`}<span class="badge">${esc(movie.age_rating || '0+')}</span></div>`;
 }
 
 function movieCard(movie) {
   const rating = movie.rating_avg ? `★ ${Number(movie.rating_avg).toFixed(1)}` : 'Без оценки';
-  return `<article class="card" data-slug="${esc(movie.slug)}" tabindex="0">${poster(movie)}<h3>${esc(movie.title)}</h3><div class="card-meta"><div class="meta">${movie.year} · ${esc(movie.country)}</div><div class="rating">${rating}</div></div></article>`;
+  return `<a class="card" href="#/movie/${encodeURIComponent(movie.slug)}">${poster(movie)}<h3>${esc(movie.title)}</h3><div class="card-meta"><div class="meta">${movie.year} · ${esc(movie.country)}</div><div class="rating">${rating}</div></div></a>`;
 }
 
-function bindCards() {
-  document.querySelectorAll('[data-slug]').forEach(card => {
-    const open = () => location.hash = `#/movie/${encodeURIComponent(card.dataset.slug)}`;
-    card.onclick = open; card.onkeydown = e => { if (e.key === 'Enter') open(); };
+function bindFeaturedMovie() {
+  document.querySelectorAll('button[data-slug]').forEach(button => {
+    button.onclick = () => location.hash = `#/movie/${encodeURIComponent(button.dataset.slug)}`;
   });
 }
 
@@ -48,17 +48,16 @@ async function home() {
   const data = await api('/movies/?sort=popular');
   const movies = data.results; const hero = movies.find(x => x.is_featured) || movies[0];
   const heroImage = hero?.poster ? `style="--hero-image:url('${esc(hero.poster)}')"` : '';
-  app.innerHTML = hero ? `<section class="hero" ${heroImage}><div class="hero-content"><div class="eyebrow">Выбор редакции</div><h1>${esc(hero.title)}</h1><div class="hero-meta"><span>${hero.year}</span><span>${esc(hero.country)}</span><span>${hero.age_rating || '0+'}</span>${hero.rating_avg ? `<span>★ ${Number(hero.rating_avg).toFixed(1)}</span>` : ''}</div><p>${esc(hero.description)}</p><button class="btn" data-slug="${esc(hero.slug)}">Смотреть подробнее</button></div></section><section class="section"><div class="section-head"><h2>Популярные фильмы</h2><a href="#/catalog">Весь каталог →</a></div><div class="grid">${movies.slice(0,6).map(movieCard).join('')}</div></section>` : '<div class="empty">Каталог пока пуст</div>';
-  bindCards();
+  app.innerHTML = hero ? `<section class="hero" ${heroImage}><div class="hero-content"><div class="eyebrow">Выбор редакции</div><h1>${esc(hero.title)}</h1><div class="hero-meta"><span>${hero.year}</span><span>${esc(hero.country)}</span><span>${esc(hero.age_rating || '0+')}</span>${hero.rating_avg ? `<span>★ ${Number(hero.rating_avg).toFixed(1)}</span>` : ''}</div><p>${esc(hero.description)}</p><button class="btn" data-slug="${esc(hero.slug)}">Смотреть подробнее</button></div></section><section class="section"><div class="section-head"><h2>Популярные фильмы</h2><a href="#/catalog">Весь каталог →</a></div><div class="grid">${movies.slice(0,6).map(movieCard).join('')}</div></section>` : '<div class="empty">Каталог пока пуст</div>';
+  bindFeaturedMovie();
 }
 
 async function catalog() {
   const [genres, data] = await Promise.all([api('/genres/'), api('/movies/')]);
   app.innerHTML = `<section class="section"><div class="section-head"><div><div class="eyebrow">Коллекция</div><h2>Каталог фильмов</h2></div></div><form class="filters" id="filters"><input class="field" name="q" placeholder="Название, актёр или режиссёр"><select class="field" name="genre"><option value="">Все жанры</option>${genres.map(g=>`<option value="${esc(g.slug)}">${esc(g.name)}</option>`).join('')}</select><select class="field" name="sort"><option value="newest">Сначала новые</option><option value="rating">По рейтингу</option><option value="popular">По популярности</option><option value="year_desc">По году</option></select><button class="btn">Найти</button></form><div id="catalog-grid" class="grid">${data.results.map(movieCard).join('')}</div></section>`;
-  bindCards();
   document.querySelector('#filters').onsubmit = async e => {
     e.preventDefault(); const qs = new URLSearchParams(new FormData(e.target));
-    const result = await api(`/movies/?${qs}`); document.querySelector('#catalog-grid').innerHTML = result.results.length ? result.results.map(movieCard).join('') : '<div class="empty">Ничего не найдено</div>'; bindCards();
+    const result = await api(`/movies/?${qs}`); document.querySelector('#catalog-grid').innerHTML = result.results.length ? result.results.map(movieCard).join('') : '<div class="empty">Ничего не найдено</div>';
   };
 }
 
@@ -88,12 +87,12 @@ function authPage(mode) {
 
 async function favorites() {
   if (!token()) return location.hash='#/login';
-  const movies=await api('/favorites/'); app.innerHTML=`<section class="section"><div class="section-head"><h2>Избранное</h2></div><div class="grid">${movies.length?movies.map(movieCard).join(''):'<div class="empty">Здесь пока нет фильмов</div>'}</div></section>`;bindCards();
+  const movies=await api('/favorites/'); app.innerHTML=`<section class="section"><div class="section-head"><h2>Избранное</h2></div><div class="grid">${movies.length?movies.map(movieCard).join(''):'<div class="empty">Здесь пока нет фильмов</div>'}</div></section>`;
 }
 
 async function router() {
   app.innerHTML='<div class="loader">Загружаем кино…</div>'; const parts=location.hash.replace(/^#\/?/,'').split('/');
-  const route = parts[0] || 'home';
+  const route = parts[0] === 'movie' ? 'catalog' : (parts[0] || 'home');
   document.querySelectorAll('[data-route]').forEach(link => link.classList.toggle('active', link.dataset.route === route));
   try { if(parts[0]==='catalog') await catalog(); else if(parts[0]==='movie') await movie(decodeURIComponent(parts[1])); else if(parts[0]==='login'||parts[0]==='register') authPage(parts[0]); else if(parts[0]==='favorites') await favorites(); else await home(); app.focus(); } catch(error) { app.innerHTML=`<div class="empty"><h2>Не удалось загрузить страницу</h2><p>${esc(error.message)}</p></div>`; }
 }
