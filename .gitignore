@@ -1,4 +1,7 @@
 .env
+.env.*
+!.env.example
+!.env.*.example
 __pycache__/
 *.py[cod]
 *.sqlite3
@@ -6,4 +9,3 @@ media/*
 !media/.gitkeep
 .venv/
 node_modules/
-

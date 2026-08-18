@@ -9,6 +9,8 @@ services:
     volumes:
       - backend_data:/app/data
       - media_data:/app/media
+    environment:
+      DJANGO_SEED_DEMO: ${DJANGO_SEED_DEMO:-true}
     ports:
       - "8001:8000"
     healthcheck:
