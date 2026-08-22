@@ -8,10 +8,10 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import serializers as drf_serializers
 from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view, inline_serializer
-from .models import Genre, Movie
+from .models import Genre, Movie, WatchProgress
 from .pagination import MoviePagination
 from .selectors import filtered_movies, published_movies
-from .serializers import GenreSerializer, LoginSerializer, MovieDetailSerializer, MovieListSerializer, RegisterSerializer, UserSerializer
+from .serializers import GenreSerializer, LoginSerializer, MovieDetailSerializer, MovieListSerializer, RegisterSerializer, UserSerializer, WatchHistorySerializer, WatchProgressPositionSerializer, WatchProgressWriteSerializer
 from .services import add_comment, set_rating, toggle_favorite
 from .throttles import AuditedAnonRateThrottle, AuditedUserRateThrottle, CommentRateThrottle, LoginRateThrottle, RegisterRateThrottle
 
@@ -100,6 +100,40 @@ def me(request): return Response(UserSerializer(request.user).data)
 def favorites(request):
     qs = published_movies().filter(favorited_by__user=request.user)
     return Response(MovieListSerializer(qs, many=True, context={"request": request}).data)
+
+
+@extend_schema(methods=["GET"], responses=WatchHistorySerializer(many=True), operation_id="watch_history_list")
+@extend_schema(methods=["DELETE"], request=None, responses={204: None}, operation_id="watch_history_clear")
+@api_view(["GET", "DELETE"])
+@permission_classes([IsAuthenticated])
+def watch_history(request):
+    queryset = WatchProgress.objects.filter(user=request.user, movie__is_published=True).select_related("movie").prefetch_related("movie__genres")
+    if request.method == "DELETE":
+        WatchProgress.objects.filter(user=request.user).delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+    return Response(WatchHistorySerializer(queryset, many=True, context={"request": request}).data)
+
+
+@extend_schema(request=WatchProgressWriteSerializer, responses=WatchProgressPositionSerializer)
+@api_view(["PUT"])
+@permission_classes([IsAuthenticated])
+def watch_progress(request, slug):
+    serializer = WatchProgressWriteSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    progress, _ = WatchProgress.objects.update_or_create(
+        user=request.user,
+        movie=public_movie(slug),
+        defaults=serializer.validated_data,
+    )
+    return Response(WatchProgressPositionSerializer(progress).data)
+
+
+@extend_schema(request=None, responses={204: None}, operation_id="watch_history_item_delete")
+@api_view(["DELETE"])
+@permission_classes([IsAuthenticated])
+def delete_watch_history_item(request, slug):
+    WatchProgress.objects.filter(user=request.user, movie__slug=slug).delete()
+    return Response(status=status.HTTP_204_NO_CONTENT)
 
 def public_movie(slug): return get_object_or_404(Movie, slug=slug, is_published=True)
 

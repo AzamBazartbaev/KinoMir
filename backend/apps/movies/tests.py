@@ -7,7 +7,7 @@ from django.urls import reverse
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
 from .admin import MovieAdminForm, approve_comments, hide_comments, publish_movies
-from .models import Comment, Genre, Movie, Rating
+from .models import Comment, Genre, Movie, Rating, WatchProgress
 from .video import resolve_video
 
 class ApiTests(APITestCase):
@@ -39,6 +39,41 @@ class ApiTests(APITestCase):
         self.assertEqual(response.data["value"], 5)
         self.assertEqual(response.data["rating_avg"], 5.0)
         self.assertEqual(response.data["ratings_count"], 1)
+
+    def test_watch_progress_is_saved_updated_and_restored(self):
+        first = self.client.put("/api/movies/test/progress/", {"position_seconds": 31, "duration_seconds": 120}, format="json")
+        second = self.client.put("/api/movies/test/progress/", {"position_seconds": 64, "duration_seconds": 120}, format="json")
+        detail = self.client.get("/api/movies/test/")
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.data["position_seconds"], 64)
+        self.assertEqual(second.data["progress_percent"], 53)
+        self.assertEqual(WatchProgress.objects.count(), 1)
+        self.assertEqual(detail.data["watch_progress"]["position_seconds"], 64)
+
+    def test_watch_history_is_private(self):
+        other = get_user_model().objects.create_user("other", "other@example.com", "StrongPass123!")
+        WatchProgress.objects.create(user=self.user, movie=self.movie, position_seconds=20, duration_seconds=100)
+        WatchProgress.objects.create(user=other, movie=self.movie, position_seconds=80, duration_seconds=100)
+
+        response = self.client.get("/api/watch-history/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["position_seconds"], 20)
+
+        self.client.delete("/api/watch-history/test/")
+        self.assertFalse(WatchProgress.objects.filter(user=self.user).exists())
+        self.assertTrue(WatchProgress.objects.filter(user=other).exists())
+
+    def test_watch_history_can_be_cleared_without_touching_another_user(self):
+        other = get_user_model().objects.create_user("history-other", "history-other@example.com", "StrongPass123!")
+        WatchProgress.objects.create(user=self.user, movie=self.movie, position_seconds=10, duration_seconds=100)
+        WatchProgress.objects.create(user=other, movie=self.movie, position_seconds=40, duration_seconds=100)
+
+        response = self.client.delete("/api/watch-history/")
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(WatchProgress.objects.filter(user=self.user).exists())
+        self.assertTrue(WatchProgress.objects.filter(user=other).exists())
 
     def test_empty_comment_is_rejected(self):
         empty = self.client.post("/api/movies/test/comments/", {"text": ""}, format="json")

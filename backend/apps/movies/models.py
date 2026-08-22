@@ -147,3 +147,21 @@ class Comment(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     class Meta:
         ordering = ["-created_at"]
+
+
+class WatchProgress(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="watch_history")
+    movie = models.ForeignKey(Movie, on_delete=models.CASCADE, related_name="watch_progress")
+    position_seconds = models.PositiveIntegerField(default=0)
+    duration_seconds = models.PositiveIntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at", "-id"]
+        constraints = [models.UniqueConstraint(fields=["user", "movie"], name="unique_watch_progress")]
+
+    @property
+    def progress_percent(self):
+        if not self.duration_seconds:
+            return 0
+        return min(100, round(self.position_seconds / self.duration_seconds * 100))
