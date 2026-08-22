@@ -9,6 +9,56 @@ const safeExternalUrl = value => {
   try { const url = new URL(value); return ['http:', 'https:'].includes(url.protocol) ? esc(url.href) : ''; }
   catch { return ''; }
 };
+const absoluteUrl = value => { try { return new URL(value, location.origin).href; } catch { return location.origin; } };
+const seoDescription = value => String(value || '').replace(/\s+/g, ' ').trim().slice(0, 160);
+
+function setSeoMeta(selector, attribute, value) {
+  let node = document.head.querySelector(selector);
+  if (!node) {
+    node = document.createElement('meta');
+    const match = selector.match(/meta\[(name|property)="([^"]+)"\]/);
+    if (match) node.setAttribute(match[1], match[2]);
+    document.head.appendChild(node);
+  }
+  node.setAttribute(attribute, value);
+}
+
+function updateSeo({title, description, canonical = '/', image = '/social-card.svg', type = 'website', robots = 'index,follow,max-image-preview:large'}) {
+  const canonicalUrl = absoluteUrl(canonical);
+  const imageUrl = absoluteUrl(image);
+  document.title = title;
+  setSeoMeta('meta[name="description"]', 'content', seoDescription(description));
+  setSeoMeta('meta[name="robots"]', 'content', robots);
+  setSeoMeta('meta[property="og:type"]', 'content', type);
+  setSeoMeta('meta[property="og:title"]', 'content', title);
+  setSeoMeta('meta[property="og:description"]', 'content', seoDescription(description));
+  setSeoMeta('meta[property="og:url"]', 'content', canonicalUrl);
+  setSeoMeta('meta[property="og:image"]', 'content', imageUrl);
+  setSeoMeta('meta[name="twitter:card"]', 'content', 'summary_large_image');
+  setSeoMeta('meta[name="twitter:title"]', 'content', title);
+  setSeoMeta('meta[name="twitter:description"]', 'content', seoDescription(description));
+  setSeoMeta('meta[name="twitter:image"]', 'content', imageUrl);
+  let link = document.head.querySelector('link[rel="canonical"]');
+  if (!link) { link = document.createElement('link'); link.rel = 'canonical'; document.head.appendChild(link); }
+  link.href = canonicalUrl;
+}
+
+function applyRouteSeo(route, params) {
+  const kyrgyz = language() === 'ky';
+  if (!route) return updateSeo({
+    title:kyrgyz ? 'КиноОрдо — кыргыз тасмалары' : 'КиноОрдо — кыргызское кино',
+    description:kyrgyz ? 'Кыргыз тасмалары, рейтингдер жана мыйзамдуу көрүү булактары.' : 'Современный каталог кыргызских фильмов, рейтингов и легальных источников просмотра.',
+  });
+  if (route === 'catalog') {
+    const query = params.get('q');
+    return updateSeo({title:query ? `${query} — ${t('catalog_title')} — КиноОрдо` : `${t('catalog_title')} — КиноОрдо`, description:t('search_placeholder'), canonical:`/#/catalog${params.size ? `?${params}` : ''}`});
+  }
+  if (route === 'rights-holders' || route === 'takedown-policy') {
+    const title = route === 'rights-holders' ? t('rights_holders') : t('takedown');
+    return updateSeo({title:`${title} — КиноОрдо`, description:title, canonical:`/#/${route}`});
+  }
+  updateSeo({title:`КиноОрдо — ${t('account')}`, description:t('profile_intro'), canonical:'/', robots:'noindex,nofollow'});
+}
 const fieldLabels = () => ({username:t('username'), email:'Email', password:t('password'), non_field_errors:t('request_failed')});
 const HTTP_ERRORS = {
   0: {get title(){return t('network_title')}, get message(){return t('network_message')}},
@@ -510,6 +560,13 @@ function legalMarkup(legal = {}) {
 
 async function movie(slug) {
   const m = await api(`/movies/${encodeURIComponent(slug)}/`);
+  updateSeo({
+    title:`${m.title} (${m.year}) — КиноОрдо`,
+    description:`${m.title} (${m.year}). ${m.description}`,
+    canonical:`/films/${encodeURIComponent(m.slug)}/`,
+    image:m.poster || '/social-card.svg',
+    type:'video.movie',
+  });
   const comments = m.comments.length ? m.comments.map(commentMarkup).join('') : `<div class="comments-empty">${t('comments_empty')}</div>`;
   const guestNote = token() ? '' : `<div class="social-auth-note"><a href="#/login">${t('login_to_discuss')}</a></div>`;
   app.innerHTML = `<article class="detail">
@@ -736,6 +793,7 @@ async function router() {
   window.pageSignal = window.pageController.signal;
   app.setAttribute('aria-busy', 'true');
   app.innerHTML=`<div class="loader" role="status"><span>${t('loading')}</span></div>`; const [path, queryString = ''] = location.hash.replace(/^#\/?/,'').split('?'); const parts=path.split('/'); const routeParams = new URLSearchParams(queryString);
+  applyRouteSeo(parts[0], routeParams);
   const route = parts[0] === 'movie' ? 'catalog' : (parts[0] || 'home');
   document.querySelectorAll('[data-route]').forEach(link => link.classList.toggle('active', link.dataset.route === route));
   try {
