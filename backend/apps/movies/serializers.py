@@ -1,6 +1,8 @@
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.password_validation import validate_password
+from django.urls import reverse
 from rest_framework import serializers
+from .images import IMAGE_FORMATS, POSTER_WIDTHS
 from .models import Comment, Genre, Movie, Rating, WatchProgress
 from .video import resolve_video
 
@@ -37,9 +39,10 @@ class MovieListSerializer(serializers.ModelSerializer):
     rating_avg = serializers.FloatField(read_only=True, allow_null=True)
     ratings_count = serializers.IntegerField(read_only=True)
     is_favorite = serializers.SerializerMethodField()
+    poster_sources = serializers.SerializerMethodField()
     class Meta:
         model = Movie
-        fields = ["id", "title", "title_ru", "title_ky", "original_title", "slug", "description", "description_ru", "description_ky", "year", "country", "duration", "age_rating", "genres", "poster", "banner", "is_featured", "views_count", "rating_avg", "ratings_count", "is_favorite"]
+        fields = ["id", "title", "title_ru", "title_ky", "original_title", "slug", "description", "description_ru", "description_ky", "year", "country", "duration", "age_rating", "genres", "poster", "poster_sources", "banner", "is_featured", "views_count", "rating_avg", "ratings_count", "is_favorite"]
 
     def get_title(self, obj) -> str:
         return (obj.title_ky or obj.title) if requested_language(self.context) == "ky" else (obj.title or obj.title_ky)
@@ -48,8 +51,23 @@ class MovieListSerializer(serializers.ModelSerializer):
         return (obj.description_ky or obj.description) if requested_language(self.context) == "ky" else (obj.description or obj.description_ky)
 
     def get_is_favorite(self, obj) -> bool:
+        if hasattr(obj, "is_favorite_value"):
+            return obj.is_favorite_value
         user = self.context["request"].user
         return user.is_authenticated and obj.favorited_by.filter(user=user).exists()
+
+    def get_poster_sources(self, obj) -> dict:
+        if not obj.poster:
+            return {}
+        request = self.context.get("request")
+        result = {}
+        for image_format in IMAGE_FORMATS:
+            variants = []
+            for width in sorted(POSTER_WIDTHS):
+                path = reverse("movie-poster-variant", kwargs={"slug": obj.slug, "width": width, "image_format": image_format})
+                variants.append({"url": request.build_absolute_uri(path) if request else path, "width": width})
+            result[image_format] = variants
+        return result
 
 class MovieLegalSerializer(serializers.Serializer):
     rights_holder = serializers.CharField(read_only=True)
