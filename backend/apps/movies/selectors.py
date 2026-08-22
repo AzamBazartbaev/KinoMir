@@ -1,4 +1,4 @@
-from django.db.models import Avg, Count, Q
+from django.db.models import Avg, Count, F, Q
 from .models import Movie
 
 SORT_FIELDS = {"newest": "-created_at", "year_desc": "-year", "year_asc": "year", "title": "title", "rating": "-rating_avg", "popular": "-views_count"}
@@ -16,5 +16,6 @@ def filtered_movies(params):
         except (TypeError, ValueError): pass
     if country := params.get("country"): qs = qs.filter(country__iexact=country)
     if age := params.get("age_rating"): qs = qs.filter(age_rating=age)
-    return qs.order_by(SORT_FIELDS.get(params.get("sort"), "-created_at"), "-id").distinct()
-
+    sort = params.get("sort")
+    primary_order = F("rating_avg").desc(nulls_last=True) if sort == "rating" else SORT_FIELDS.get(sort, "-created_at")
+    return qs.order_by(primary_order, "-id").distinct()

@@ -1,5 +1,6 @@
 import os
 
+import sentry_sdk
 from django.core.exceptions import ImproperlyConfigured
 
 from .settings import *  # noqa: F403
@@ -44,9 +45,24 @@ SECURE_HSTS_SECONDS = int(os.getenv("DJANGO_SECURE_HSTS_SECONDS", "31536000"))
 SECURE_HSTS_INCLUDE_SUBDOMAINS = os.getenv("DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS", "True").lower() == "true"
 SECURE_HSTS_PRELOAD = os.getenv("DJANGO_SECURE_HSTS_PRELOAD", "False").lower() == "true"
 
+SENTRY_DSN = os.getenv("SENTRY_DSN", "").strip()
+if SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        environment=os.getenv("SENTRY_ENVIRONMENT", "production"),
+        release=os.getenv("SENTRY_RELEASE") or None,
+        send_default_pii=False,
+        traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.05")),
+    )
+
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
-    "handlers": {"console": {"class": "logging.StreamHandler"}},
+    "formatters": {"security": {"format": "{asctime} {levelname} {name} {message}", "style": "{"}},
+    "handlers": {
+        "console": {"class": "logging.StreamHandler"},
+        "security_console": {"class": "logging.StreamHandler", "formatter": "security"},
+    },
     "root": {"handlers": ["console"], "level": os.getenv("DJANGO_LOG_LEVEL", "INFO")},
+    "loggers": {"security": {"handlers": ["security_console"], "level": "WARNING", "propagate": False}},
 }

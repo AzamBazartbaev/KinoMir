@@ -1,0 +1,42 @@
+groups:
+  - name: kinomir-availability
+    rules:
+      - alert: KinoMirPublicEndpointUnavailable
+        expr: probe_success{job="public-health"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "КиноОрдо недоступен извне"
+          description: "Внешняя HTTPS-проверка {{ $labels.instance }} не проходит более двух минут."
+
+      - alert: KinoMirPublicEndpointReturns5xx
+        expr: probe_http_status_code{job="public-health"} >= 500
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Публичный health endpoint возвращает HTTP 5xx"
+          description: "{{ $labels.instance }} возвращает статус {{ $value }}."
+
+      - alert: KinoMirBackendUnavailable
+        expr: up{job="django"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Prometheus не может получить метрики Django"
+          description: "Backend недоступен для мониторинга более двух минут."
+
+      - alert: KinoMirBackend5xxRateHigh
+        expr: |
+          sum(rate(django_http_responses_total_by_status_total{status=~"5.."}[5m]))
+          /
+          clamp_min(sum(rate(django_http_responses_total_by_status_total[5m])), 0.001)
+          > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Доля HTTP 5xx превысила 5%"
+          description: "Более 5% ответов Django за последние пять минут имеют статус 5xx."

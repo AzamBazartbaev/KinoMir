@@ -1,0 +1,81 @@
+name: kinomir-e2e
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: kinomir_e2e
+      POSTGRES_USER: kinomir_e2e
+      POSTGRES_PASSWORD: kinomir-e2e-password
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kinomir_e2e -d kinomir_e2e"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7.4-alpine
+    command: redis-server --save "" --appendonly no
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    build: ./backend
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings_e2e
+      DJANGO_SECRET_KEY: e2e-only-secret-key
+      DJANGO_ALLOWED_HOSTS: backend,frontend,localhost,127.0.0.1
+      DJANGO_SEED_DEMO: "true"
+      POSTGRES_DB: kinomir_e2e
+      POSTGRES_USER: kinomir_e2e
+      POSTGRES_PASSWORD: kinomir-e2e-password
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      REDIS_URL: redis://redis:6379/1
+      DJANGO_ADMIN_USERNAME: e2e-admin
+      DJANGO_ADMIN_PASSWORD: e2e-admin-password
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health/', timeout=3)"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        API_URL: /api
+    ports:
+      - "3100:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1/"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  e2e:
+    build: ./e2e
+    environment:
+      E2E_BASE_URL: http://frontend
+      CI: ${CI:-}
+    depends_on:
+      frontend:
+        condition: service_healthy
+    volumes:
+      - ./e2e/artifacts:/work/test-results
+      - ./e2e/reports:/work/playwright-report
+    init: true
