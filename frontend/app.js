@@ -533,7 +533,7 @@ function legalPage(kind) {
 function authPage(mode) {
   const register = mode === 'register';
   if (token()) { location.hash = '#/profile'; return; }
-  app.innerHTML = `<section class="auth-card"><div class="eyebrow">Аккаунт</div><h1>${register?'Регистрация':'Вход'}</h1><form id="auth-form" novalidate><label>Имя пользователя<input class="field" name="username" minlength="3" maxlength="150" autocomplete="username" required placeholder="Например, azam"></label>${register?'<label>Email<input class="field" name="email" type="email" autocomplete="email" required placeholder="name@example.com"></label>':''}<label>Пароль<input class="field" name="password" type="password" minlength="8" autocomplete="${register?'new-password':'current-password'}" required placeholder="Минимум 8 символов"></label>${register?'<label>Повторите пароль<input class="field" name="password_confirm" type="password" minlength="8" autocomplete="new-password" required placeholder="Введите пароль ещё раз"></label>':''}<div id="auth-error" role="alert" aria-live="polite"></div><button class="btn" type="submit">${register?'Создать аккаунт':'Войти'}</button></form><p>${register?'Уже зарегистрированы? <a href="#/login">Войти</a>':'Нет аккаунта? <a href="#/register">Регистрация</a>'}</p></section>`;
+  app.innerHTML = `<section class="auth-card"><div class="eyebrow">Аккаунт</div><h1>${register?'Регистрация':'Вход'}</h1><form id="auth-form" novalidate><label>Имя пользователя<input class="field" name="username" minlength="3" maxlength="150" autocomplete="username" required placeholder="Например, azam"></label>${register?'<label>Email<input class="field" name="email" type="email" autocomplete="email" required placeholder="name@example.com"></label>':''}<label>Пароль<input class="field" name="password" type="password" minlength="8" autocomplete="${register?'new-password':'current-password'}" required placeholder="Минимум 8 символов"></label>${register?'<label>Повторите пароль<input class="field" name="password_confirm" type="password" minlength="8" autocomplete="new-password" required placeholder="Введите пароль ещё раз"></label>':''}<div id="auth-error" role="alert" aria-live="polite"></div><button class="btn" type="submit">${register?'Создать аккаунт':'Войти'}</button></form><p>${register?'Уже зарегистрированы? <a href="#/login">Войти</a>':'Нет аккаунта? <a href="#/register">Регистрация</a><br><a href="#/password-reset">Забыли пароль?</a>'}</p></section>`;
   document.querySelector('#auth-form').onsubmit = async e => {
     e.preventDefault();
     const form = e.target;
@@ -563,6 +563,65 @@ function authPage(mode) {
   };
 }
 
+function formError(node, error) {
+  const messages = error.messages || [error.message || 'Не удалось выполнить запрос.'];
+  node.innerHTML = `<div class="error"><ul>${messages.map(message => `<li>${esc(message)}</li>`).join('')}</ul></div>`;
+}
+
+function passwordResetRequestPage() {
+  app.innerHTML = `<section class="auth-card"><div class="eyebrow">Безопасность аккаунта</div><h1>Восстановление пароля</h1><p>Укажите email аккаунта. Ответ будет одинаковым независимо от того, зарегистрирован адрес или нет.</p><form id="password-reset-request-form" novalidate><label>Email<input class="field" name="email" type="email" autocomplete="email" required placeholder="name@example.com"></label><div id="account-form-message" role="status" aria-live="polite"></div><button class="btn" type="submit">Отправить инструкцию</button></form><p><a href="#/login">Вернуться ко входу</a></p></section>`;
+  const form = document.querySelector('#password-reset-request-form');
+  form.onsubmit = async event => {
+    event.preventDefault();
+    if (!form.reportValidity()) return;
+    const button = form.querySelector('button');
+    const message = document.querySelector('#account-form-message');
+    button.disabled = true; message.innerHTML = '';
+    try {
+      const result = await api('/auth/password-reset/request/', {method:'POST', body:JSON.stringify(Object.fromEntries(new FormData(form)))});
+      message.innerHTML = `<div class="success">${esc(result.detail)}</div>`;
+      form.reset();
+    } catch (error) { formError(message, error); }
+    finally { button.disabled = false; }
+  };
+}
+
+function passwordResetConfirmPage(params) {
+  const resetToken = params.get('token') || '';
+  app.innerHTML = `<section class="auth-card"><div class="eyebrow">Безопасность аккаунта</div><h1>Новый пароль</h1>${resetToken ? `<form id="password-reset-confirm-form" novalidate><label>Новый пароль<input class="field" name="password" type="password" minlength="8" autocomplete="new-password" required></label><label>Повторите пароль<input class="field" name="password_confirm" type="password" minlength="8" autocomplete="new-password" required></label><div id="account-form-message" role="alert" aria-live="polite"></div><button class="btn" type="submit">Изменить пароль</button></form>` : '<div class="error">В ссылке отсутствует токен восстановления.</div>'}<p><a href="#/login">Вернуться ко входу</a></p></section>`;
+  const form = document.querySelector('#password-reset-confirm-form');
+  if (!form) return;
+  form.onsubmit = async event => {
+    event.preventDefault();
+    if (!form.reportValidity()) return;
+    const body = Object.fromEntries(new FormData(form));
+    const message = document.querySelector('#account-form-message');
+    if (body.password !== body.password_confirm) { message.innerHTML = '<div class="error">Пароли не совпадают.</div>'; return; }
+    const button = form.querySelector('button'); button.disabled = true; message.innerHTML = '';
+    try {
+      const result = await api('/auth/password-reset/confirm/', {method:'POST', body:JSON.stringify({...body, token:resetToken})});
+      app.innerHTML = `<section class="auth-card"><div class="eyebrow">Готово</div><h1>Пароль изменён</h1><p>${esc(result.detail)}</p><a class="btn" href="#/login">Войти</a></section>`;
+    } catch (error) { formError(message, error); button.disabled = false; }
+  };
+}
+
+function emailConfirmPage(params) {
+  const confirmationToken = params.get('token') || '';
+  app.innerHTML = `<section class="auth-card"><div class="eyebrow">Email</div><h1>Подтверждение адреса</h1>${confirmationToken ? '<p>Нажмите кнопку, чтобы подтвердить новый email. Ссылка сработает только один раз.</p><form id="email-confirm-form"><div id="account-form-message" role="alert" aria-live="polite"></div><button class="btn" type="submit">Подтвердить email</button></form>' : '<div class="error">В ссылке отсутствует токен подтверждения.</div>'}<p><a href="#/profile">Вернуться в профиль</a></p></section>`;
+  const form = document.querySelector('#email-confirm-form');
+  if (!form) return;
+  form.onsubmit = async event => {
+    event.preventDefault();
+    const button = form.querySelector('button'); const message = document.querySelector('#account-form-message');
+    button.disabled = true;
+    try {
+      const result = await api('/auth/email-change/confirm/', {method:'POST', body:JSON.stringify({token:confirmationToken})});
+      message.innerHTML = `<div class="success">${esc(result.detail)}</div>`;
+      button.remove();
+    } catch (error) { formError(message, error); button.disabled = false; }
+  };
+}
+
 async function favorites() {
   if (!token()) return location.hash='#/login';
   const movies=await api('/favorites/'); app.innerHTML=`<section class="section"><div class="section-head"><h2>Избранное</h2></div><div class="grid">${movies.length?movies.map(movieCard).join(''):'<div class="empty">Здесь пока нет фильмов</div>'}</div></section>`;
@@ -573,7 +632,20 @@ async function profile() {
   try {
     const user = await api('/auth/me/');
     const joined = new Intl.DateTimeFormat('ru-RU', {day:'numeric', month:'long', year:'numeric'}).format(new Date(user.date_joined));
-    app.innerHTML = `<section class="profile-card"><div class="profile-avatar" aria-hidden="true">${esc(user.username.slice(0, 1).toUpperCase())}</div><div class="eyebrow">Личный профиль</div><h1>${esc(user.username)}</h1><p class="profile-intro">Здесь хранятся данные вашего аккаунта КиноОрдо.</p><dl class="profile-data"><div><dt>Имя пользователя</dt><dd>${esc(user.username)}</dd></div><div><dt>Email</dt><dd>${esc(user.email || 'Не указан')}</dd></div><div><dt>Дата регистрации</dt><dd>${esc(joined)}</dd></div></dl><div class="profile-actions"><a class="btn" href="#/favorites">Открыть избранное</a><a class="btn secondary" href="#/catalog">Перейти в каталог</a></div></section>`;
+    app.innerHTML = `<section class="profile-card"><div class="profile-avatar" aria-hidden="true">${esc(user.username.slice(0, 1).toUpperCase())}</div><div class="eyebrow">Личный профиль</div><h1>${esc(user.username)}</h1><p class="profile-intro">Здесь хранятся данные вашего аккаунта КиноОрдо.</p><dl class="profile-data"><div><dt>Имя пользователя</dt><dd>${esc(user.username)}</dd></div><div><dt>Email</dt><dd>${esc(user.email || 'Не указан')}</dd></div><div><dt>Дата регистрации</dt><dd>${esc(joined)}</dd></div></dl><section class="profile-email" aria-labelledby="email-change-title"><h2 id="email-change-title">Изменить email</h2><p>Новый адрес будет сохранён только после перехода по ссылке из письма.</p><form id="email-change-form" novalidate><label>Новый email<input class="field" name="email" type="email" autocomplete="email" required placeholder="new@example.com"></label><div id="email-change-message" role="status" aria-live="polite"></div><button class="btn secondary" type="submit">Отправить подтверждение</button></form></section><div class="profile-actions"><a class="btn" href="#/favorites">Открыть избранное</a><a class="btn secondary" href="#/catalog">Перейти в каталог</a></div></section>`;
+    const emailForm = document.querySelector('#email-change-form');
+    emailForm.onsubmit = async event => {
+      event.preventDefault();
+      if (!emailForm.reportValidity()) return;
+      const button = emailForm.querySelector('button'); const message = document.querySelector('#email-change-message');
+      button.disabled = true; message.innerHTML = '';
+      try {
+        const result = await api('/auth/email-change/request/', {method:'POST', body:JSON.stringify(Object.fromEntries(new FormData(emailForm)))});
+        message.innerHTML = `<div class="success">${esc(result.detail)}</div>`;
+        emailForm.reset();
+      } catch (error) { formError(message, error); }
+      finally { button.disabled = false; }
+    };
   } catch (error) {
     if (error.status === 401) { location.hash = '#/login'; return; }
     throw error;
@@ -590,7 +662,7 @@ async function router() {
   const route = parts[0] === 'movie' ? 'catalog' : (parts[0] || 'home');
   document.querySelectorAll('[data-route]').forEach(link => link.classList.toggle('active', link.dataset.route === route));
   try {
-    if(parts[0]==='catalog') await catalog(routeParams); else if(parts[0]==='movie') await movie(decodeURIComponent(parts[1])); else if(parts[0]==='login'||parts[0]==='register') authPage(parts[0]); else if(parts[0]==='favorites') await favorites(); else if(parts[0]==='profile') await profile(); else if(parts[0]==='rights-holders'||parts[0]==='takedown-policy') legalPage(parts[0]); else await home();
+    if(parts[0]==='catalog') await catalog(routeParams); else if(parts[0]==='movie') await movie(decodeURIComponent(parts[1])); else if(parts[0]==='login'||parts[0]==='register') authPage(parts[0]); else if(parts[0]==='password-reset') passwordResetRequestPage(); else if(parts[0]==='password-reset-confirm') passwordResetConfirmPage(routeParams); else if(parts[0]==='email-confirm') emailConfirmPage(routeParams); else if(parts[0]==='favorites') await favorites(); else if(parts[0]==='profile') await profile(); else if(parts[0]==='rights-holders'||parts[0]==='takedown-policy') legalPage(parts[0]); else await home();
     app.removeAttribute('aria-busy');
     app.focus();
   } catch(error) {

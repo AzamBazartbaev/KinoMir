@@ -49,6 +49,10 @@ docker compose up --build
 | POST | `/api/auth/login/` | Вход, выдаёт token | Все |
 | POST | `/api/auth/logout/` | Удаление текущего token | Token |
 | GET | `/api/auth/me/` | Текущий пользователь | Token |
+| POST | `/api/auth/password-reset/request/` | Запросить письмо восстановления | Все |
+| POST | `/api/auth/password-reset/confirm/` | Установить пароль по одноразовому токену | Все |
+| POST | `/api/auth/email-change/request/` | Запросить смену email | Token |
+| POST | `/api/auth/email-change/confirm/` | Подтвердить новый email | Все |
 | GET | `/api/favorites/` | Избранные фильмы | Token |
 | POST | `/api/movies/{slug}/favorite/` | Переключить избранное | Token |
 | PUT | `/api/movies/{slug}/rating/` | Поставить/изменить оценку 1–5 | Token |
@@ -88,7 +92,7 @@ python manage.py test
 .\e2e\run.ps1
 ```
 
-Playwright проверяет каталог, поиск, фильм, регистрацию, вход/выход, избранное, рейтинг и комментарии. При падении screenshot, trace и видео сохраняются в `e2e/artifacts`, HTML-отчёт — в `e2e/reports`. Тот же набор автоматически выполняется в GitHub Actions.
+Playwright проверяет каталог, поиск, фильм, регистрацию, вход/выход, восстановление аккаунта, подтверждение email, избранное, рейтинг и комментарии. При падении screenshot, trace и видео сохраняются в `e2e/artifacts`, HTML-отчёт — в `e2e/reports`. Тот же набор автоматически выполняется в GitHub Actions.
 
 Frontend можно открыть через любой статический HTTP-сервер; при локальном запуске `config.js` автоматически использует `http://localhost:8000/api`.
 
