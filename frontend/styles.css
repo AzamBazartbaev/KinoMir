@@ -47,6 +47,9 @@ a { color: inherit; text-decoration: none; }
 button, input, select, textarea { font: inherit; }
 button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.sr-only { width: 1px !important; height: 1px !important; padding: 0 !important; margin: -1px !important; position: absolute !important; overflow: hidden !important; clip: rect(0, 0, 0, 0) !important; white-space: nowrap !important; border: 0 !important; }
+.skip-link { position: fixed; top: 10px; left: 16px; z-index: 100; padding: 11px 16px; border-radius: 10px; color: #17110e; background: var(--accent); font-weight: 800; transform: translateY(-150%); transition: transform .18s ease; }
+.skip-link:focus { transform: translateY(0); }
 
 .header {
   height: 76px;
@@ -167,7 +170,7 @@ main { min-height: calc(100vh - 170px); position: relative; z-index: 1; }
 .home-collections .section { padding-block: 46px; }
 .home-collections .section + .section { border-top: 1px solid var(--line); }
 .section-head { display: flex; justify-content: space-between; align-items: end; gap: 20px; margin-bottom: 26px; }
-.section h2, .comments h2 { margin: 0; font-size: clamp(27px, 3vw, 38px); letter-spacing: -.035em; }
+.section h1, .section h2, .comments h2 { margin: 0; font-size: clamp(27px, 3vw, 38px); letter-spacing: -.035em; }
 .section-head > a { color: var(--muted); font-size: 14px; font-weight: 700; transition: color .2s; }
 .section-head > a:hover { color: var(--text); }
 
@@ -432,6 +435,6 @@ footer p { margin: 5px 0 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
   .skeleton::after, .loader::before, .video-loading span { animation: none; }
 }
