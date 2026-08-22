@@ -25,12 +25,27 @@ class MovieListSerializer(serializers.ModelSerializer):
         user = self.context["request"].user
         return user.is_authenticated and obj.favorited_by.filter(user=user).exists()
 
+class MovieLegalSerializer(serializers.Serializer):
+    rights_holder = serializers.CharField(read_only=True)
+    license_type = serializers.CharField(read_only=True)
+    license_label = serializers.CharField(source="get_license_type_display", read_only=True)
+    rights_status = serializers.CharField(read_only=True)
+    rights_status_label = serializers.CharField(source="get_rights_status_display", read_only=True)
+    content_source_url = serializers.URLField(read_only=True)
+    video_content_type = serializers.CharField(read_only=True)
+    video_content_label = serializers.CharField(source="get_video_content_type_display", read_only=True)
+    poster_attribution = serializers.CharField(read_only=True)
+    poster_source_url = serializers.URLField(read_only=True)
+    video_attribution = serializers.CharField(read_only=True)
+    video_source_url = serializers.URLField(read_only=True)
+
 class MovieDetailSerializer(MovieListSerializer):
     comments = serializers.SerializerMethodField()
     player = serializers.SerializerMethodField()
     user_rating = serializers.SerializerMethodField()
+    legal = MovieLegalSerializer(source="*", read_only=True)
     class Meta(MovieListSerializer.Meta):
-        fields = MovieListSerializer.Meta.fields + ["director", "actors", "trailer_url", "player", "comments", "user_rating", "created_at"]
+        fields = MovieListSerializer.Meta.fields + ["director", "actors", "trailer_url", "player", "comments", "user_rating", "legal", "created_at"]
     def get_comments(self, obj) -> list: return CommentSerializer(obj.comments.filter(is_approved=True), many=True).data
     def get_player(self, obj) -> dict: return resolve_video(obj.source_type, obj.video_url)
     def get_user_rating(self, obj) -> int | None:
@@ -44,10 +59,18 @@ class UserSerializer(serializers.ModelSerializer):
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
     class Meta: model = User; fields = ["username", "email", "password"]
+    def validate_username(self, value):
+        value = value.strip()
+        if len(value) < 3: raise serializers.ValidationError("Имя пользователя должно содержать минимум 3 символа.")
+        if User.objects.filter(username__iexact=value).exists(): raise serializers.ValidationError("Это имя пользователя уже занято.")
+        return value
     def validate_email(self, value):
+        value = User.objects.normalize_email(value.strip())
         if User.objects.filter(email__iexact=value).exists(): raise serializers.ValidationError("Этот email уже используется.")
         return value
-    def validate_password(self, value): validate_password(value); return value
+    def validate_password(self, value):
+        validate_password(value)
+        return value
     def create(self, data): return User.objects.create_user(**data)
 
 class LoginSerializer(serializers.Serializer):

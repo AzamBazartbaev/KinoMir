@@ -1,0 +1,26 @@
+name: External uptime check
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  public-health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Check public API health endpoint
+        env:
+          PRODUCTION_URL: ${{ vars.PRODUCTION_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$PRODUCTION_URL" || { echo "Set the PRODUCTION_URL repository variable" >&2; exit 1; }
+          response="$(curl --fail-with-body --silent --show-error --location \
+            --max-time 20 --retry 2 --retry-all-errors \
+            "$PRODUCTION_URL/api/health/")"
+          test "$response" = '{"status":"ok"}' || { echo "Unexpected health response: $response" >&2; exit 1; }

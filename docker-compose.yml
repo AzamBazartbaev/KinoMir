@@ -1,6 +1,16 @@
 name: kinomir
 
 services:
+  redis:
+    image: redis:7.4-alpine
+    command: redis-server --save "" --appendonly no
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   backend:
     build: ./backend
     env_file:
@@ -11,6 +21,11 @@ services:
       - media_data:/app/media
     environment:
       DJANGO_SEED_DEMO: ${DJANGO_SEED_DEMO:-true}
+      REDIS_URL: redis://redis:6379/1
+      DRF_NUM_PROXIES: "1"
+    depends_on:
+      redis:
+        condition: service_healthy
     ports:
       - "8001:8000"
     healthcheck:
