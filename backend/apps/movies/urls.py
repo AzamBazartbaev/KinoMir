@@ -5,6 +5,7 @@ urlpatterns = [
     path("health/", views.health),
     path("genres/", views.GenreListView.as_view()),
     path("movies/", views.MovieListView.as_view()),
+    path("movies/<str:slug>/poster/<int:width>.<str:image_format>", views.poster_variant, name="movie-poster-variant"),
     path("movies/<str:slug>/", views.MovieDetailView.as_view()),
     path("movies/<str:slug>/favorite/", views.favorite),
     path("movies/<str:slug>/rating/", views.rating),

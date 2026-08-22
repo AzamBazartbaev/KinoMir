@@ -4,3 +4,6 @@ class MoviesConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "apps.movies"
     verbose_name = "КиноОрдо"
+
+    def ready(self):
+        from . import signals  # noqa: F401
