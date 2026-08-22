@@ -2,8 +2,13 @@ from django.contrib.auth import get_user_model
 from django.conf import settings
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
-from django.db import IntegrityError, transaction
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import IntegrityError, connection, transaction
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
+from io import BytesIO
+from PIL import Image
+import tempfile
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
 from .admin import MovieAdminForm, approve_comments, hide_comments, publish_movies
@@ -28,6 +33,42 @@ class ApiTests(APITestCase):
         response = self.client.get("/api/movies/")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["count"], 1)
+
+    def test_catalog_favorite_flag_does_not_create_n_plus_one_queries(self):
+        for number in range(5):
+            movie = Movie.objects.create(
+                title=f"Фильм {number}", slug=f"movie-{number}", description="x", year=2024,
+                country="Кыргызстан", duration=90, is_published=True,
+            )
+            movie.genres.add(self.genre)
+
+        with CaptureQueriesContext(connection) as queries:
+            response = self.client.get("/api/movies/", {"page_size": 12})
+
+        favorite_queries = [query["sql"] for query in queries.captured_queries if "movies_favorite" in query["sql"].lower()]
+        self.assertEqual(response.status_code, 200)
+        self.assertLessEqual(len(queries), 5)
+        # The favorite EXISTS expression is present once in the paginator count
+        # and once in the page query, never once per serialized movie.
+        self.assertLessEqual(len(favorite_queries), 2)
+
+    def test_poster_variants_are_responsive_and_immutably_cached(self):
+        image = Image.new("RGB", (900, 1350), "#8b5e3c")
+        source = BytesIO()
+        image.save(source, format="JPEG", quality=90)
+
+        with tempfile.TemporaryDirectory() as media_root, self.settings(MEDIA_ROOT=media_root):
+            self.movie.poster.save("performance-test.jpg", SimpleUploadedFile("performance-test.jpg", source.getvalue(), content_type="image/jpeg"))
+            catalog = self.client.get("/api/movies/").data["results"][0]
+            response = self.client.get("/api/movies/test/poster/240.webp")
+            body = b"".join(response.streaming_content)
+
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response["Content-Type"], "image/webp")
+            self.assertIn("immutable", response["Cache-Control"])
+            self.assertEqual(Image.open(BytesIO(body)).size, (240, 360))
+            self.assertEqual([item["width"] for item in catalog["poster_sources"]["avif"]], [240, 480, 720])
+            self.assertEqual(self.client.get("/api/movies/test/poster/241.webp").status_code, 404)
 
     def test_published_movie_has_indexable_seo_page(self):
         response = self.client.get("/films/test/")

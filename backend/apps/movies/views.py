@@ -1,4 +1,5 @@
 from django.db.models import Avg, Count, F
+from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.authtoken.models import Token
@@ -9,6 +10,7 @@ from rest_framework.response import Response
 from rest_framework import serializers as drf_serializers
 from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view, inline_serializer
 from .models import Genre, Movie, WatchProgress
+from .images import get_poster_variant
 from .pagination import MoviePagination
 from .selectors import filtered_movies, published_movies
 from .serializers import GenreSerializer, LoginSerializer, MovieDetailSerializer, MovieListSerializer, RegisterSerializer, UserSerializer, WatchHistorySerializer, WatchProgressPositionSerializer, WatchProgressWriteSerializer
@@ -38,12 +40,12 @@ class GenreListView(ListAPIView):
 class MovieListView(ListAPIView):
     serializer_class = MovieListSerializer
     pagination_class = MoviePagination
-    def get_queryset(self): return filtered_movies(self.request.query_params)
+    def get_queryset(self): return filtered_movies(self.request.query_params, self.request.user)
 
 class MovieDetailView(RetrieveAPIView):
     serializer_class = MovieDetailSerializer
     lookup_field = "slug"
-    def get_queryset(self): return published_movies()
+    def get_queryset(self): return published_movies(self.request.user)
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
         Movie.objects.filter(pk=instance.pk).update(views_count=F("views_count") + 1)
@@ -98,7 +100,7 @@ def me(request): return Response(UserSerializer(request.user).data)
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def favorites(request):
-    qs = published_movies().filter(favorited_by__user=request.user)
+    qs = published_movies(request.user).filter(favorited_by__user=request.user)
     return Response(MovieListSerializer(qs, many=True, context={"request": request}).data)
 
 
@@ -136,6 +138,19 @@ def delete_watch_history_item(request, slug):
     return Response(status=status.HTTP_204_NO_CONTENT)
 
 def public_movie(slug): return get_object_or_404(Movie, slug=slug, is_published=True)
+
+
+def poster_variant(request, slug, width, image_format):
+    movie = get_object_or_404(Movie.objects.only("poster"), slug=slug, is_published=True)
+    try:
+        variant = get_poster_variant(movie.poster, width, image_format)
+    except (FileNotFoundError, ValueError):
+        raise Http404("Poster variant is unavailable")
+    response = FileResponse(variant.file, content_type=variant.content_type)
+    response["Cache-Control"] = "public, max-age=31536000, immutable"
+    response["ETag"] = f'"{variant.etag}"'
+    response["Vary"] = "Accept"
+    return response
 
 @extend_schema(request=None, responses=FavoriteResponse)
 @api_view(["POST"])

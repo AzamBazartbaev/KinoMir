@@ -181,8 +181,23 @@ function renderPageError(error) {
   document.querySelector('#page-retry')?.addEventListener('click', router);
 }
 
-function poster(movie) {
-  return `<div class="poster">${movie.poster ? `<img src="${esc(movie.poster)}" alt="${t('poster')}: ${esc(movie.title)}" loading="lazy" decoding="async">` : `<span class="placeholder">${esc(movie.title.slice(0,1))}</span>`}<span class="badge">${esc(movie.age_rating || '0+')}</span></div>`;
+function posterSrcset(movie, imageFormat) {
+  return (movie.poster_sources?.[imageFormat] || [])
+    .map(variant => `${esc(variant.url)} ${Number(variant.width)}w`)
+    .join(', ');
+}
+
+function optimizedPosterUrl(movie, imageFormat = 'avif', width = 720) {
+  const variants = movie.poster_sources?.[imageFormat] || [];
+  return variants.find(variant => Number(variant.width) === width)?.url || movie.poster || '';
+}
+
+function poster(movie, {eager = false, sizes = '(max-width: 560px) 46vw, (max-width: 900px) 31vw, 240px'} = {}) {
+  if (!movie.poster) return `<div class="poster"><span class="placeholder">${esc(movie.title.slice(0,1))}</span><span class="badge">${esc(movie.age_rating || '0+')}</span></div>`;
+  const avif = posterSrcset(movie, 'avif');
+  const webp = posterSrcset(movie, 'webp');
+  const sources = `${avif ? `<source type="image/avif" srcset="${avif}" sizes="${esc(sizes)}">` : ''}${webp ? `<source type="image/webp" srcset="${webp}" sizes="${esc(sizes)}">` : ''}`;
+  return `<div class="poster"><picture>${sources}<img src="${esc(movie.poster)}" alt="${t('poster')}: ${esc(movie.title)}" width="480" height="720" loading="${eager ? 'eager' : 'lazy'}"${eager ? ' fetchpriority="high"' : ''} decoding="async"></picture><span class="badge">${esc(movie.age_rating || '0+')}</span></div>`;
 }
 
 function replaceBrokenPoster(image) {
@@ -193,9 +208,9 @@ function replaceBrokenPoster(image) {
   wrapper.insertAdjacentHTML('afterbegin', `<span class="placeholder" role="img" aria-label="${t('poster_unavailable')}: ${esc(title)}">${esc(title.slice(0, 1) || 'К')}</span>`);
 }
 
-function movieCard(movie) {
+function movieCard(movie, options = {}) {
   const rating = movie.rating_avg ? `★ ${Number(movie.rating_avg).toFixed(1)}` : t('no_rating');
-  return `<a class="card" href="#/movie/${encodeURIComponent(movie.slug)}">${poster(movie)}<h3>${esc(movie.title)}</h3><div class="card-meta"><div class="meta">${movie.year} · ${esc(movie.country)}</div><div class="rating">${rating}</div></div></a>`;
+  return `<a class="card" href="#/movie/${encodeURIComponent(movie.slug)}">${poster(movie, options)}<h3>${esc(movie.title)}</h3><div class="card-meta"><div class="meta">${movie.year} · ${esc(movie.country)}</div><div class="rating">${rating}</div></div></a>`;
 }
 
 function continueCard(entry) {
@@ -288,7 +303,7 @@ function renderHero(movie) {
     return;
   }
 
-  const heroImage = movie.banner || movie.poster;
+  const heroImage = movie.banner || optimizedPosterUrl(movie);
   target.className = 'hero';
   target.removeAttribute('aria-busy');
   target.removeAttribute('aria-label');
@@ -309,7 +324,7 @@ function renderCollection(collection, result) {
 
   const movies = result.value.results.slice(0, 6);
   target.innerHTML = movies.length
-    ? movies.map(movieCard).join('')
+    ? movies.map(movie => movieCard(movie)).join('')
     : `<div class="collection-state"><strong>${t('collection_empty')}</strong><span>${t('collection_empty_text')}</span></div>`;
 }
 
@@ -369,7 +384,7 @@ async function catalog(params = new URLSearchParams()) {
     ['rating', t('sort_rating')],
   ].map(([value, label]) => `<option value="${value}"${value === sort ? ' selected' : ''}>${label}</option>`).join('');
   const resultContent = data.results.length
-    ? `<div id="catalog-grid" class="grid">${data.results.map(movieCard).join('')}</div>`
+    ? `<div id="catalog-grid" class="grid">${data.results.map((movie, index) => movieCard(movie, {eager:index < 2})).join('')}</div>`
     : `<div id="catalog-grid" class="collection-state"><strong>${t('nothing_found')}</strong><span>${t('nothing_found_text')}</span></div>`;
   const pagination = data.previous || data.next ? `<nav class="pagination" aria-label="${t('pages')}">${catalogLink(data.previous, t('back'))}<span>${t('page_of', {page,total:totalPages})}</span>${catalogLink(data.next, t('next'))}</nav>` : '';
 
@@ -394,7 +409,7 @@ function formatTime(seconds) {
 function playerMarkup(movie) {
   const {mode, url} = movie.player;
   if (mode === 'html5') {
-    const posterUrl = movie.banner || movie.poster;
+    const posterUrl = movie.banner || optimizedPosterUrl(movie, 'webp');
     return `<div class="video-player" id="video-player" tabindex="0" aria-label="${t('video_player')}: ${esc(movie.title)}">
       <video id="movie-video" src="${esc(url)}"${posterUrl ? ` poster="${esc(posterUrl)}"` : ''} controls preload="metadata" playsinline></video>
       <button class="video-center-play" id="video-center-play" type="button" aria-label="${t('play')}"><span aria-hidden="true">▶</span></button>
@@ -570,7 +585,7 @@ async function movie(slug) {
   const comments = m.comments.length ? m.comments.map(commentMarkup).join('') : `<div class="comments-empty">${t('comments_empty')}</div>`;
   const guestNote = token() ? '' : `<div class="social-auth-note"><a href="#/login">${t('login_to_discuss')}</a></div>`;
   app.innerHTML = `<article class="detail">
-    <aside class="detail-poster">${poster(m)}</aside>
+    <aside class="detail-poster">${poster(m, {eager:true, sizes:'(max-width: 740px) 70vw, 300px'})}</aside>
     <div class="detail-content">
       <div class="eyebrow">${esc(m.genres.map(g=>g.name).join(' · '))}</div>
       <h1>${esc(m.title)}</h1>
@@ -796,8 +811,12 @@ async function router() {
   window.pageController?.abort();
   window.pageController = new AbortController();
   window.pageSignal = window.pageController.signal;
+  const [path, queryString = ''] = location.hash.replace(/^#\/?/,'').split('?');
+  const parts=path.split('/');
+  const routeParams = new URLSearchParams(queryString);
+  const hasInitialHomeShell = !window.routeReady && !parts[0] && Boolean(app.querySelector('#home-hero'));
   app.setAttribute('aria-busy', 'true');
-  app.innerHTML=`<div class="loader" role="status"><span>${t('loading')}</span></div>`; const [path, queryString = ''] = location.hash.replace(/^#\/?/,'').split('?'); const parts=path.split('/'); const routeParams = new URLSearchParams(queryString);
+  if (!hasInitialHomeShell) app.innerHTML=`<div class="loader" role="status"><span>${t('loading')}</span></div>`;
   applyRouteSeo(parts[0], routeParams);
   const route = parts[0] === 'movie' ? 'catalog' : (parts[0] || 'home');
   document.querySelectorAll('[data-route]').forEach(link => {
