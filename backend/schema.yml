@@ -1,8 +1,8 @@
 openapi: 3.0.3
 info:
-  title: КиноМир API
+  title: КиноОрдо API
   version: 1.0.0
-  description: REST API каталога фильмов
+  description: REST API каталога кыргызских фильмов
 paths:
   /api/auth/login/:
     post:
@@ -30,6 +30,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AuthResponse'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThrottleResponse'
           description: ''
   /api/auth/logout/:
     post:
@@ -81,6 +87,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AuthResponse'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThrottleResponse'
           description: ''
   /api/favorites/:
     get:
@@ -154,6 +166,11 @@ paths:
         schema:
           type: integer
         description: Номер страницы
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: Количество фильмов на странице (до 24)
       - in: query
         name: q
         schema:
@@ -239,6 +256,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommentCreateResponse'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThrottleResponse'
           description: ''
   /api/movies/{slug}/favorite/:
     post:
@@ -613,6 +636,10 @@ components:
           type: integer
           nullable: true
           readOnly: true
+        legal:
+          allOf:
+          - $ref: '#/components/schemas/MovieLegal'
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -626,6 +653,7 @@ components:
       - genres
       - id
       - is_favorite
+      - legal
       - player
       - rating_avg
       - ratings_count
@@ -633,6 +661,61 @@ components:
       - title
       - user_rating
       - year
+    MovieLegal:
+      type: object
+      properties:
+        rights_holder:
+          type: string
+          readOnly: true
+        license_type:
+          type: string
+          readOnly: true
+        license_label:
+          type: string
+          readOnly: true
+        rights_status:
+          type: string
+          readOnly: true
+        rights_status_label:
+          type: string
+          readOnly: true
+        content_source_url:
+          type: string
+          format: uri
+          readOnly: true
+        video_content_type:
+          type: string
+          readOnly: true
+        video_content_label:
+          type: string
+          readOnly: true
+        poster_attribution:
+          type: string
+          readOnly: true
+        poster_source_url:
+          type: string
+          format: uri
+          readOnly: true
+        video_attribution:
+          type: string
+          readOnly: true
+        video_source_url:
+          type: string
+          format: uri
+          readOnly: true
+      required:
+      - content_source_url
+      - license_label
+      - license_type
+      - poster_attribution
+      - poster_source_url
+      - rights_holder
+      - rights_status
+      - rights_status_label
+      - video_attribution
+      - video_content_label
+      - video_content_type
+      - video_source_url
     MovieList:
       type: object
       properties:
@@ -748,7 +831,15 @@ components:
       properties:
         value:
           type: integer
+        rating_avg:
+          type: number
+          format: double
+          nullable: true
+        ratings_count:
+          type: integer
       required:
+      - rating_avg
+      - ratings_count
       - value
     Register:
       type: object
@@ -774,6 +865,13 @@ components:
       required:
       - password
       - username
+    ThrottleResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+      required:
+      - detail
     User:
       type: object
       properties:
