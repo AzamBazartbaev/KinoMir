@@ -1,7 +1,7 @@
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
-from .models import Comment, Genre, Movie, Rating
+from .models import Comment, Genre, Movie, Rating, WatchProgress
 from .video import resolve_video
 
 User = get_user_model()
@@ -70,14 +70,45 @@ class MovieDetailSerializer(MovieListSerializer):
     player = serializers.SerializerMethodField()
     user_rating = serializers.SerializerMethodField()
     legal = MovieLegalSerializer(source="*", read_only=True)
+    watch_progress = serializers.SerializerMethodField()
     class Meta(MovieListSerializer.Meta):
-        fields = MovieListSerializer.Meta.fields + ["director", "actors", "trailer_url", "player", "comments", "user_rating", "legal", "created_at"]
+        fields = MovieListSerializer.Meta.fields + ["director", "actors", "trailer_url", "player", "comments", "user_rating", "watch_progress", "legal", "created_at"]
     def get_comments(self, obj) -> list: return CommentSerializer(obj.comments.filter(is_approved=True), many=True).data
     def get_player(self, obj) -> dict: return resolve_video(obj.source_type, obj.video_url)
     def get_user_rating(self, obj) -> int | None:
         user = self.context["request"].user
         rating = Rating.objects.filter(user=user, movie=obj).first() if user.is_authenticated else None
         return rating.value if rating else None
+    def get_watch_progress(self, obj) -> dict | None:
+        user = self.context["request"].user
+        progress = WatchProgress.objects.filter(user=user, movie=obj).first() if user.is_authenticated else None
+        return WatchProgressPositionSerializer(progress).data if progress else None
+
+
+class WatchProgressPositionSerializer(serializers.ModelSerializer):
+    progress_percent = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = WatchProgress
+        fields = ["position_seconds", "duration_seconds", "progress_percent", "updated_at"]
+
+
+class WatchProgressWriteSerializer(serializers.Serializer):
+    position_seconds = serializers.IntegerField(min_value=0)
+    duration_seconds = serializers.IntegerField(min_value=0)
+
+    def validate(self, attrs):
+        duration = attrs["duration_seconds"]
+        if duration:
+            attrs["position_seconds"] = min(attrs["position_seconds"], duration)
+        return attrs
+
+
+class WatchHistorySerializer(WatchProgressPositionSerializer):
+    movie = MovieListSerializer(read_only=True)
+
+    class Meta(WatchProgressPositionSerializer.Meta):
+        fields = ["movie", *WatchProgressPositionSerializer.Meta.fields]
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta: model = User; fields = ["id", "username", "email", "date_joined"]

@@ -9,7 +9,9 @@ urlpatterns = [
     path("movies/<str:slug>/favorite/", views.favorite),
     path("movies/<str:slug>/rating/", views.rating),
     path("movies/<str:slug>/comments/", views.comment),
+    path("movies/<str:slug>/progress/", views.watch_progress),
     path("auth/register/", views.register), path("auth/login/", views.login), path("auth/logout/", views.logout), path("auth/me/", views.me),
     path("favorites/", views.favorites),
+    path("watch-history/", views.watch_history),
+    path("watch-history/<str:slug>/", views.delete_watch_history_item),
 ]
-

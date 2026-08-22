@@ -8,7 +8,7 @@ from django.core.exceptions import ValidationError
 from django.db.models import Count
 from django.utils.html import format_html
 
-from .models import Comment, Favorite, Genre, Movie, Rating
+from .models import Comment, Favorite, Genre, Movie, Rating, WatchProgress
 from .video import resolve_video
 
 User = get_user_model()
@@ -189,6 +189,16 @@ class RatingAdmin(admin.ModelAdmin):
     list_display = ["user", "movie", "value", "updated_at"]
     list_editable = ["value"]
     list_filter = ["value", "updated_at"]
+    search_fields = ["user__username", "user__email", "movie__title"]
+    autocomplete_fields = ["user", "movie"]
+    readonly_fields = ["updated_at"]
+    list_select_related = ["user", "movie"]
+    date_hierarchy = "updated_at"
+
+
+@admin.register(WatchProgress)
+class WatchProgressAdmin(admin.ModelAdmin):
+    list_display = ["user", "movie", "position_seconds", "duration_seconds", "updated_at"]
     search_fields = ["user__username", "user__email", "movie__title"]
     autocomplete_fields = ["user", "movie"]
     readonly_fields = ["updated_at"]

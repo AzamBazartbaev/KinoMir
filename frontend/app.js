@@ -148,6 +148,20 @@ function movieCard(movie) {
   return `<a class="card" href="#/movie/${encodeURIComponent(movie.slug)}">${poster(movie)}<h3>${esc(movie.title)}</h3><div class="card-meta"><div class="meta">${movie.year} · ${esc(movie.country)}</div><div class="rating">${rating}</div></div></a>`;
 }
 
+function continueCard(entry) {
+  const movie = entry.movie;
+  const percent = Math.max(0, Math.min(100, Number(entry.progress_percent) || 0));
+  return `<article class="continue-card" data-history-slug="${esc(movie.slug)}">
+    <a class="continue-card-link" href="#/movie/${encodeURIComponent(movie.slug)}">
+      ${poster(movie)}
+      <div class="continue-card-copy"><h3>${esc(movie.title)}</h3><div class="meta">${t('continue_from', {time:formatTime(entry.position_seconds)})}</div>
+        <div class="watch-progress" role="progressbar" aria-label="${t('watch_progress')}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}"><span style="width:${percent}%"></span></div>
+      </div>
+    </a>
+    <button class="history-remove" type="button" data-remove-history="${esc(movie.slug)}" aria-label="${t('remove_history')}: ${esc(movie.title)}" title="${t('remove_history')}">×</button>
+  </article>`;
+}
+
 const homeCollections = () => [
   {id:'popular', title:t('popular'), eyebrow:t('kyrgyz_cinema'), sort:'popular'},
   {id:'newest', title:t('newest'), eyebrow:t('new_movies'), sort:'newest'},
@@ -173,6 +187,10 @@ function homeShell() {
         <div class="skeleton skeleton-button"></div>
       </div>
     </section>
+    ${token() ? `<section class="section continue-section" id="continue-section" aria-labelledby="continue-title" hidden>
+      <div class="section-head"><div><div class="eyebrow">${t('watch_history')}</div><h2 id="continue-title">${t('continue_watching')}</h2></div><button class="history-clear" id="history-clear" type="button">${t('clear_history')}</button></div>
+      <div class="continue-grid" id="continue-grid"></div>
+    </section>` : ''}
     <div class="home-collections">
       ${homeCollections().map(collection => `
         <section class="section collection" aria-labelledby="${collection.id}-title">
@@ -183,6 +201,31 @@ function homeShell() {
           <div class="grid" id="${collection.id}-grid" aria-live="polite" aria-busy="true">${skeletonCards()}</div>
         </section>`).join('')}
     </div>`;
+}
+
+function renderContinueWatching(result) {
+  const section = document.querySelector('#continue-section');
+  const grid = document.querySelector('#continue-grid');
+  if (!section || !grid || result.status !== 'fulfilled' || !result.value.length) return;
+  let entries = result.value;
+  const render = () => {
+    section.hidden = entries.length === 0;
+    grid.innerHTML = entries.map(continueCard).join('');
+    grid.querySelectorAll('[data-remove-history]').forEach(button => button.addEventListener('click', async () => {
+      button.disabled = true;
+      try {
+        await api(`/watch-history/${encodeURIComponent(button.dataset.removeHistory)}/`, {method:'DELETE'});
+        entries = entries.filter(entry => entry.movie.slug !== button.dataset.removeHistory);
+        render();
+      } catch (error) { button.disabled = false; notifyError(error); }
+    }));
+  };
+  document.querySelector('#history-clear')?.addEventListener('click', async event => {
+    event.currentTarget.disabled = true;
+    try { await api('/watch-history/', {method:'DELETE'}); entries = []; render(); toast(t('history_cleared')); }
+    catch (error) { event.currentTarget.disabled = false; notifyError(error); }
+  });
+  render();
 }
 
 function renderHero(movie) {
@@ -242,10 +285,14 @@ function setAuthControls() {
 async function home() {
   app.innerHTML = homeShell();
   const collections = homeCollections();
-  const results = await Promise.allSettled(collections.map(collection => api(`/movies/?sort=${collection.sort}&page_size=6`)));
+  const [results, historyResult] = await Promise.all([
+    Promise.allSettled(collections.map(collection => api(`/movies/?sort=${collection.sort}&page_size=6`))),
+    token() ? Promise.allSettled([api('/watch-history/')]).then(items => items[0]) : Promise.resolve({status:'fulfilled', value:[]}),
+  ]);
   const popularMovies = results[0].status === 'fulfilled' ? results[0].value.results : [];
   renderHero(popularMovies.find(movie => movie.is_featured) || popularMovies[0]);
   collections.forEach((collection, index) => renderCollection(collection, results[index]));
+  renderContinueWatching(historyResult);
 }
 
 function catalogLink(apiUrl, label, className = 'btn secondary') {
@@ -324,7 +371,17 @@ function videoKind(movie) {
   return /video\.kinoafisha\.info\/video-/i.test(movie.player?.url || '') ? t('trailer') : t('watch');
 }
 
-function initVideoPlayer() {
+function saveWatchProgress(slug, video, keepalive = false) {
+  if (!token() || !Number.isFinite(video.currentTime) || !Number.isFinite(video.duration) || video.currentTime < 1) return Promise.resolve();
+  return fetch(`${API}/movies/${encodeURIComponent(slug)}/progress/`, {
+    method:'PUT',
+    headers:{'Content-Type':'application/json', 'Accept-Language':language(), Authorization:`Token ${token()}`},
+    body:JSON.stringify({position_seconds:Math.floor(video.currentTime), duration_seconds:Math.floor(video.duration)}),
+    keepalive,
+  }).catch(() => {});
+}
+
+function initVideoPlayer(movie) {
   const shell = document.querySelector('#video-player');
   if (!shell) return;
   window.playerController?.abort();
@@ -342,6 +399,8 @@ function initVideoPlayer() {
   const speed = shell.querySelector('#video-speed');
   const fullscreen = shell.querySelector('#video-fullscreen');
   const errorState = shell.querySelector('#video-error');
+  let lastSavedPosition = Number(movie.watch_progress?.position_seconds) || 0;
+  let restored = false;
   video.controls = false;
 
   const updatePlayState = () => {
@@ -357,6 +416,18 @@ function initVideoPlayer() {
     seek.value = String(Math.round(progress * 1000));
     seek.style.setProperty('--progress', `${progress * 100}%`);
     time.textContent = `${formatTime(video.currentTime)} / ${formatTime(video.duration)}`;
+  };
+  const saveProgress = (force = false) => {
+    if (!force && Math.abs(video.currentTime - lastSavedPosition) < 10) return;
+    lastSavedPosition = Math.floor(video.currentTime);
+    saveWatchProgress(movie.slug, video, force);
+  };
+  const restoreProgress = () => {
+    if (restored || !Number.isFinite(video.duration)) return;
+    restored = true;
+    const saved = Number(movie.watch_progress?.position_seconds) || 0;
+    if (saved > 0 && saved < video.duration - 5) video.currentTime = saved;
+    updateTime();
   };
   const togglePlay = async () => {
     if (video.paused || video.ended) {
@@ -381,9 +452,10 @@ function initVideoPlayer() {
   video.addEventListener('click', togglePlay);
   video.addEventListener('dblclick', toggleFullscreen);
   video.addEventListener('play', updatePlayState);
-  video.addEventListener('pause', updatePlayState);
-  video.addEventListener('ended', updatePlayState);
-  video.addEventListener('timeupdate', updateTime);
+  video.addEventListener('pause', () => { updatePlayState(); saveProgress(true); });
+  video.addEventListener('ended', () => { updatePlayState(); saveProgress(true); });
+  video.addEventListener('timeupdate', () => { updateTime(); saveProgress(); });
+  video.addEventListener('loadedmetadata', restoreProgress);
   video.addEventListener('durationchange', updateTime);
   video.addEventListener('waiting', () => shell.classList.add('is-buffering'));
   video.addEventListener('playing', () => shell.classList.remove('is-buffering'));
@@ -406,6 +478,8 @@ function initVideoPlayer() {
     if (event.key.toLowerCase() === 'm') { video.muted = !video.muted; setMutedIcon(); }
     if (event.key.toLowerCase() === 'f') toggleFullscreen();
   });
+  playerSignal.addEventListener('abort', () => saveProgress(true), {once:true});
+  window.addEventListener('pagehide', () => saveProgress(true), {signal:playerSignal});
   updatePlayState();
   updateTime();
 }
@@ -457,7 +531,7 @@ async function movie(slug) {
       <section class="comments"><div class="comments-heading"><div><div class="eyebrow">${t('discussion')}</div><h2>${t('comments')}</h2></div><span id="comments-count">${m.comments.length}</span></div>${token()?`<form id="comment-form" novalidate><label for="comment-text">${t('your_comment')}</label><textarea class="field" id="comment-text" name="text" maxlength="1000" required placeholder="${t('comment_placeholder')}"></textarea><div class="comment-form-footer"><span id="comment-counter">0 / 1000</span><button class="btn" type="submit">${t('send')}</button></div><div id="comment-error" role="alert" aria-live="polite"></div></form>`:`<div class="comment-login-note"><a href="#/login">${t('login_to_discuss')}</a></div>`}<div id="comment-list">${comments}</div></section>
     </div>
   </article>`;
-  initVideoPlayer();
+  initVideoPlayer(m);
   document.querySelector('#favorite').onclick = async () => {
     if (!token()) return location.hash='#/login';
     const button = document.querySelector('#favorite');

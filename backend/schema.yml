@@ -398,6 +398,38 @@ paths:
               schema:
                 $ref: '#/components/schemas/FavoriteResponse'
           description: ''
+  /api/movies/{slug}/progress/:
+    put:
+      operationId: movies_progress_update
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - movies
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WatchProgressWrite'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/WatchProgressWrite'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/WatchProgressWrite'
+        required: true
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WatchProgressPosition'
+          description: ''
   /api/movies/{slug}/rating/:
     put:
       operationId: movies_rating_update
@@ -575,6 +607,47 @@ paths:
                 type: object
                 additionalProperties: {}
           description: ''
+  /api/watch-history/:
+    get:
+      operationId: watch_history_list
+      tags:
+      - watch-history
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WatchHistory'
+          description: ''
+    delete:
+      operationId: watch_history_clear
+      tags:
+      - watch-history
+      security:
+      - tokenAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/watch-history/{slug}/:
+    delete:
+      operationId: watch_history_item_delete
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - watch-history
+      security:
+      - tokenAuth: []
+      responses:
+        '204':
+          description: No response body
 components:
   schemas:
     AccountMessageResponse:
@@ -795,6 +868,11 @@ components:
           type: integer
           nullable: true
           readOnly: true
+        watch_progress:
+          type: object
+          additionalProperties: {}
+          nullable: true
+          readOnly: true
         legal:
           allOf:
           - $ref: '#/components/schemas/MovieLegal'
@@ -821,6 +899,7 @@ components:
       - title
       - title_ru
       - user_rating
+      - watch_progress
       - year
     MovieLegal:
       type: object
@@ -1103,6 +1182,69 @@ components:
       required:
       - id
       - username
+    WatchHistory:
+      type: object
+      properties:
+        movie:
+          allOf:
+          - $ref: '#/components/schemas/MovieList'
+          readOnly: true
+        position_seconds:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        duration_seconds:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        progress_percent:
+          type: integer
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - movie
+      - progress_percent
+      - updated_at
+    WatchProgressPosition:
+      type: object
+      properties:
+        position_seconds:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        duration_seconds:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        progress_percent:
+          type: integer
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - progress_percent
+      - updated_at
+    WatchProgressWrite:
+      type: object
+      properties:
+        position_seconds:
+          type: integer
+          minimum: 0
+        duration_seconds:
+          type: integer
+          minimum: 0
+      required:
+      - duration_seconds
+      - position_seconds
   securitySchemes:
     tokenAuth:
       type: apiKey
