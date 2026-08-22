@@ -6,21 +6,47 @@ from .video import resolve_video
 
 User = get_user_model()
 
+
+def requested_language(context) -> str:
+    request = context.get("request")
+    if request is None:
+        return "ru"
+    value = request.query_params.get("lang") or request.headers.get("Accept-Language", "ru")
+    return "ky" if value.lower().split(",", 1)[0].strip().startswith("ky") else "ru"
+
+
 class GenreSerializer(serializers.ModelSerializer):
-    class Meta: model = Genre; fields = ["id", "name", "slug", "description", "image"]
+    name = serializers.SerializerMethodField()
+    name_ru = serializers.CharField(source="name", read_only=True)
+
+    class Meta: model = Genre; fields = ["id", "name", "name_ru", "name_ky", "slug", "description", "image"]
+
+    def get_name(self, obj) -> str:
+        return (obj.name_ky or obj.name) if requested_language(self.context) == "ky" else (obj.name or obj.name_ky)
 
 class CommentSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source="user.username", read_only=True)
     class Meta: model = Comment; fields = ["id", "username", "text", "created_at", "updated_at"]
 
 class MovieListSerializer(serializers.ModelSerializer):
+    title = serializers.SerializerMethodField()
+    description = serializers.SerializerMethodField()
+    title_ru = serializers.CharField(source="title", read_only=True)
+    description_ru = serializers.CharField(source="description", read_only=True)
     genres = GenreSerializer(many=True, read_only=True)
     rating_avg = serializers.FloatField(read_only=True, allow_null=True)
     ratings_count = serializers.IntegerField(read_only=True)
     is_favorite = serializers.SerializerMethodField()
     class Meta:
         model = Movie
-        fields = ["id", "title", "original_title", "slug", "description", "year", "country", "duration", "age_rating", "genres", "poster", "banner", "is_featured", "views_count", "rating_avg", "ratings_count", "is_favorite"]
+        fields = ["id", "title", "title_ru", "title_ky", "original_title", "slug", "description", "description_ru", "description_ky", "year", "country", "duration", "age_rating", "genres", "poster", "banner", "is_featured", "views_count", "rating_avg", "ratings_count", "is_favorite"]
+
+    def get_title(self, obj) -> str:
+        return (obj.title_ky or obj.title) if requested_language(self.context) == "ky" else (obj.title or obj.title_ky)
+
+    def get_description(self, obj) -> str:
+        return (obj.description_ky or obj.description) if requested_language(self.context) == "ky" else (obj.description or obj.description_ky)
+
     def get_is_favorite(self, obj) -> bool:
         user = self.context["request"].user
         return user.is_authenticated and obj.favorited_by.filter(user=user).exists()

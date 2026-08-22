@@ -82,6 +82,25 @@ class ApiTests(APITestCase):
         self.assertEqual([item["slug"] for item in by_title.data["results"]], ["test"])
         self.assertEqual([item["slug"] for item in by_description.data["results"]], ["other"])
 
+    def test_catalog_localizes_movies_and_keeps_explicit_translations(self):
+        self.movie.title_ky = "Сыноо тасмасы"
+        self.movie.description_ky = "Кыргызча сүрөттөмө"
+        self.movie.save(update_fields=["title_ky", "description_ky"])
+        response = self.client.get("/api/movies/", HTTP_ACCEPT_LANGUAGE="ky-KG,ky;q=0.9")
+        item = response.data["results"][0]
+        self.assertEqual(item["title"], "Сыноо тасмасы")
+        self.assertEqual(item["description"], "Кыргызча сүрөттөмө")
+        self.assertEqual(item["title_ru"], "Тест")
+        self.assertEqual(item["description_ru"], "Описание")
+
+    def test_catalog_uses_russian_fallback_and_searches_kyrgyz(self):
+        fallback = self.client.get("/api/movies/", HTTP_ACCEPT_LANGUAGE="ky")
+        self.assertEqual(fallback.data["results"][0]["title"], "Тест")
+        self.movie.description_ky = "Уникалдуу кыргызча баян"
+        self.movie.save(update_fields=["description_ky"])
+        search = self.client.get("/api/movies/", {"q": "Уникалдуу"}, HTTP_ACCEPT_LANGUAGE="ky")
+        self.assertEqual([item["slug"] for item in search.data["results"]], ["test"])
+
     def test_catalog_filters_by_genre_and_year(self):
         other_genre = Genre.objects.create(name="Комедия", slug="comedy")
         other = Movie.objects.create(title="Комедия", slug="comedy-movie", description="x", year=2024, country="Франция", duration=95, is_published=True)

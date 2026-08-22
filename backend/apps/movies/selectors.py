@@ -9,7 +9,7 @@ def published_movies():
 def filtered_movies(params):
     qs = published_movies()
     if query := params.get("q"):
-        qs = qs.filter(Q(title__icontains=query) | Q(original_title__icontains=query) | Q(description__icontains=query) | Q(director__icontains=query) | Q(actors__icontains=query))
+        qs = qs.filter(Q(title__icontains=query) | Q(title_ky__icontains=query) | Q(original_title__icontains=query) | Q(description__icontains=query) | Q(description_ky__icontains=query) | Q(director__icontains=query) | Q(actors__icontains=query))
     if genre := params.get("genre"): qs = qs.filter(genres__slug=genre)
     if year := params.get("year"):
         try: qs = qs.filter(year=int(year))
