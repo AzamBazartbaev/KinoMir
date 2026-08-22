@@ -21,6 +21,7 @@ class MovieAdminForm(forms.ModelForm):
         exclude = ["views_count"]
         widgets = {
             "description": forms.Textarea(attrs={"rows": 5}),
+            "description_ky": forms.Textarea(attrs={"rows": 5}),
             "actors": forms.Textarea(attrs={"rows": 3}),
         }
 
@@ -85,11 +86,11 @@ def unfeature_movies(modeladmin, request, queryset):
 
 @admin.register(Genre)
 class GenreAdmin(admin.ModelAdmin):
-    list_display = ["name", "slug", "movies_total", "is_active"]
+    list_display = ["name", "name_ky", "slug", "movies_total", "is_active"]
     list_display_links = ["name", "slug"]
     list_editable = ["is_active"]
     list_filter = ["is_active"]
-    search_fields = ["name", "slug", "description"]
+    search_fields = ["name", "name_ky", "slug", "description"]
     prepopulated_fields = {"slug": ("name",)}
     ordering = ["name"]
     save_on_top = True
@@ -110,7 +111,7 @@ class MovieAdmin(admin.ModelAdmin):
     list_display_links = ["title"]
     list_editable = ["is_published", "is_featured"]
     list_filter = ["rights_status", "license_type", "video_content_type", "is_published", "is_featured", "source_type", "genres", "country", "year", "age_rating"]
-    search_fields = ["title", "original_title", "description", "director", "actors", "country", "rights_holder"]
+    search_fields = ["title", "title_ky", "original_title", "description", "description_ky", "director", "actors", "country", "rights_holder"]
     prepopulated_fields = {"slug": ("title",)}
     filter_horizontal = ["genres"]
     readonly_fields = ["poster_preview", "views_count", "created_at", "updated_at"]
@@ -119,7 +120,7 @@ class MovieAdmin(admin.ModelAdmin):
     list_per_page = 30
     actions = [verify_rights, publish_movies, unpublish_movies, feature_movies, unfeature_movies]
     fieldsets = [
-        ("Основная информация", {"fields": ("title", "original_title", "slug", "description")}),
+        ("Основная информация", {"fields": (("title", "title_ky"), "original_title", "slug", ("description", "description_ky"))}),
         ("Каталог", {"fields": (("year", "duration", "age_rating"), "country", "genres", "director", "actors")}),
         ("Изображения", {"fields": ("poster", "poster_preview", "banner", "poster_attribution", "poster_source_url")}),
         ("Видео", {"fields": (("video_content_type", "source_type"), "video_url", "trailer_url", "video_attribution", "video_source_url"), "description": "Используйте только ссылки http:// или https://."}),

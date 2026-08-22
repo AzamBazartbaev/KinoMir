@@ -43,7 +43,7 @@ docker compose up --build
 |---|---|---|---|
 | GET | `/api/health/` | Проверка сервиса | Все |
 | GET | `/api/genres/` | Активные жанры | Все |
-| GET | `/api/movies/` | Каталог, фильтры, поиск, пагинация | Все |
+| GET | `/api/movies/` | Каталог, фильтры, поиск, пагинация и локализация `ru`/`ky` | Все |
 | GET | `/api/movies/{slug}/` | Карточка фильма | Все |
 | POST | `/api/auth/register/` | Регистрация, выдаёт token | Все |
 | POST | `/api/auth/login/` | Вход, выдаёт token | Все |
@@ -58,7 +58,7 @@ docker compose up --build
 | PUT | `/api/movies/{slug}/rating/` | Поставить/изменить оценку 1–5 | Token |
 | POST | `/api/movies/{slug}/comments/` | Добавить комментарий | Token |
 
-Параметры `GET /api/movies/`: `q`, `genre`, `year`, `country`, `age_rating`, `sort`, `page`. Сортировки: `newest`, `year_desc`, `year_asc`, `title`, `rating`, `popular`.
+Параметры `GET /api/movies/`: `q`, `genre`, `year`, `country`, `age_rating`, `sort`, `page`, `lang`. Сортировки: `newest`, `year_desc`, `year_asc`, `title`, `rating`, `popular`. Язык также определяется по заголовку `Accept-Language`; если кыргызский перевод отсутствует, API возвращает русский текст.
 
 Для закрытых методов передаётся заголовок:
 

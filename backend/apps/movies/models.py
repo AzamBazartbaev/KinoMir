@@ -5,6 +5,7 @@ from django.db import models
 
 class Genre(models.Model):
     name = models.CharField("название", max_length=100, unique=True)
+    name_ky = models.CharField("название на кыргызском", max_length=100, blank=True)
     slug = models.SlugField(unique=True, allow_unicode=True)
     description = models.TextField(blank=True)
     image = models.ImageField(upload_to="genres/", blank=True)
@@ -42,9 +43,11 @@ class Movie(models.Model):
         ("rejected", "Публикация запрещена"),
     ]
     title = models.CharField("название", max_length=255)
+    title_ky = models.CharField("название на кыргызском", max_length=255, blank=True)
     original_title = models.CharField(max_length=255, blank=True)
     slug = models.SlugField(unique=True, allow_unicode=True)
     description = models.TextField()
+    description_ky = models.TextField("описание на кыргызском", blank=True)
     year = models.PositiveSmallIntegerField(validators=[MinValueValidator(1888), MaxValueValidator(2100)])
     country = models.CharField(max_length=100)
     duration = models.PositiveSmallIntegerField(help_text="Минуты")

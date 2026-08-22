@@ -33,6 +33,7 @@ class GenreListView(ListAPIView):
     OpenApiParameter("sort", str, enum=["newest", "year_desc", "year_asc", "title", "rating", "popular"]),
     OpenApiParameter("page", int, description="Номер страницы"),
     OpenApiParameter("page_size", int, description="Количество фильмов на странице (до 24)"),
+    OpenApiParameter("lang", str, enum=["ru", "ky"], description="Язык контента; также поддерживается Accept-Language"),
 ]))
 class MovieListView(ListAPIView):
     serializer_class = MovieListSerializer

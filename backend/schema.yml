@@ -269,6 +269,14 @@ paths:
           type: string
         description: Slug жанра
       - in: query
+        name: lang
+        schema:
+          type: string
+          enum:
+          - ky
+          - ru
+        description: Язык контента; также поддерживается Accept-Language
+      - in: query
         name: page
         schema:
           type: integer
@@ -643,7 +651,13 @@ components:
           readOnly: true
         name:
           type: string
-          title: Название
+          readOnly: true
+        name_ru:
+          type: string
+          readOnly: true
+        name_ky:
+          type: string
+          title: Название на кыргызском
           maxLength: 100
         slug:
           type: string
@@ -658,6 +672,7 @@ components:
       required:
       - id
       - name
+      - name_ru
       - slug
     HealthResponse:
       type: object
@@ -685,7 +700,13 @@ components:
           readOnly: true
         title:
           type: string
-          title: Название
+          readOnly: true
+        title_ru:
+          type: string
+          readOnly: true
+        title_ky:
+          type: string
+          title: Название на кыргызском
           maxLength: 255
         original_title:
           type: string
@@ -696,6 +717,13 @@ components:
           maxLength: 50
         description:
           type: string
+          readOnly: true
+        description_ru:
+          type: string
+          readOnly: true
+        description_ky:
+          type: string
+          title: Описание на кыргызском
         year:
           type: integer
           maximum: 2100
@@ -780,6 +808,7 @@ components:
       - country
       - created_at
       - description
+      - description_ru
       - duration
       - genres
       - id
@@ -790,6 +819,7 @@ components:
       - ratings_count
       - slug
       - title
+      - title_ru
       - user_rating
       - year
     MovieLegal:
@@ -855,7 +885,13 @@ components:
           readOnly: true
         title:
           type: string
-          title: Название
+          readOnly: true
+        title_ru:
+          type: string
+          readOnly: true
+        title_ky:
+          type: string
+          title: Название на кыргызском
           maxLength: 255
         original_title:
           type: string
@@ -866,6 +902,13 @@ components:
           maxLength: 50
         description:
           type: string
+          readOnly: true
+        description_ru:
+          type: string
+          readOnly: true
+        description_ky:
+          type: string
+          title: Описание на кыргызском
         year:
           type: integer
           maximum: 2100
@@ -916,6 +959,7 @@ components:
       required:
       - country
       - description
+      - description_ru
       - duration
       - genres
       - id
@@ -924,6 +968,7 @@ components:
       - ratings_count
       - slug
       - title
+      - title_ru
       - year
     PaginatedMovieListList:
       type: object

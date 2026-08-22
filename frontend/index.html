@@ -10,19 +10,20 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=22">
+  <link rel="stylesheet" href="styles.css?v=23">
 </head>
 <body>
   <header class="header">
-    <a class="brand" href="#/" aria-label="КиноОрдо — главная"><span class="brand-symbol" aria-hidden="true"></span>КИНО<span>ОРДО</span></a>
-    <nav class="main-nav" aria-label="Основная навигация">
-      <a href="#/" data-route="home">Главная</a><a href="#/catalog" data-route="catalog">Каталог</a><a href="#/favorites" data-route="favorites">Избранное</a>
+    <a class="brand" href="#/" aria-label="КиноОрдо"><span class="brand-symbol" aria-hidden="true"></span>КИНО<span>ОРДО</span></a>
+    <nav class="main-nav" id="main-nav" aria-label="Основная навигация">
+      <a href="#/" data-route="home" data-i18n="nav_home">Главная</a><a href="#/catalog" data-route="catalog" data-i18n="nav_catalog">Каталог</a><a href="#/favorites" data-route="favorites" data-i18n="nav_favorites">Избранное</a>
     </nav>
+    <div class="language-switcher" id="language-switcher" role="group" aria-label="Язык интерфейса"><button type="button" data-language="ky">КЫР</button><button type="button" data-language="ru">РУС</button></div>
     <div id="auth-controls"></div>
   </header>
   <main id="app" tabindex="-1"><div class="loader">Загружаем кино…</div></main>
-  <footer><div><strong>КИНО<span>ОРДО</span></strong><p>Кыргыз тасмаларынын дүйнөсү.</p></div><nav class="footer-links" aria-label="Правовая информация"><a href="#/rights-holders">Правообладателям</a><a href="#/takedown-policy">Политика удаления контента</a></nav><span>Кыргыз киносуна арналган окуу каталогу</span></footer>
+  <footer><div><strong>КИНО<span>ОРДО</span></strong><p data-i18n="footer_tagline">Кыргыз тасмаларынын дүйнөсү.</p></div><nav class="footer-links" id="legal-nav" aria-label="Правовая информация"><a href="#/rights-holders" data-i18n="rights_holders">Правообладателям</a><a href="#/takedown-policy" data-i18n="takedown">Политика удаления контента</a></nav><span data-i18n="footer_note">Кыргыз киносуна арналган окуу каталогу</span></footer>
   <div id="toast" role="status" aria-live="polite"></div>
-  <script src="config.js?v=22"></script><script src="app.js?v=22"></script>
+  <script src="config.js?v=23"></script><script src="i18n.js?v=23"></script><script src="app.js?v=23"></script>
 </body>
 </html>

@@ -2,25 +2,26 @@ const configuredApi = window.KINOMIR_API_URL || '/api';
 const API = (configuredApi.includes('__') ? 'http://localhost:8000/api' : configuredApi).replace(/\/$/, '');
 const API_TIMEOUT_MS = 10000;
 const app = document.querySelector('#app');
+const {t, language, setLanguage, translateServerMessage} = window.kinoordoI18n;
 const token = () => localStorage.getItem('kinomir_token');
 const esc = value => String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 const safeExternalUrl = value => {
   try { const url = new URL(value); return ['http:', 'https:'].includes(url.protocol) ? esc(url.href) : ''; }
   catch { return ''; }
 };
-const FIELD_LABELS = {username:'Имя пользователя', email:'Email', password:'Пароль', non_field_errors:'Ошибка'};
+const fieldLabels = () => ({username:t('username'), email:'Email', password:t('password'), non_field_errors:t('request_failed')});
 const HTTP_ERRORS = {
-  0: {title: 'Нет соединения с сервером', message: 'Проверьте интернет и убедитесь, что КиноОрдо запущен.'},
-  401: {title: 'Нужно войти в аккаунт', message: 'Сессия завершилась или для этого действия требуется авторизация.'},
-  403: {title: 'Доступ запрещён', message: 'У вашего аккаунта нет прав для выполнения этого действия.'},
-  404: {title: 'Страница не найдена', message: 'Возможно, фильм удалён или адрес указан неправильно.'},
-  429: {title: 'Слишком много запросов', message: 'Защита от спама временно ограничила запросы. Подождите немного и попробуйте снова.'},
-  500: {title: 'Ошибка на сервере', message: 'Мы не смогли обработать запрос. Попробуйте ещё раз немного позже.'},
+  0: {get title(){return t('network_title')}, get message(){return t('network_message')}},
+  401: {get title(){return t('unauthorized_title')}, get message(){return t('unauthorized_message')}},
+  403: {get title(){return t('forbidden_title')}, get message(){return t('forbidden_message')}},
+  404: {get title(){return t('not_found_title')}, get message(){return t('not_found_message')}},
+  429: {get title(){return t('throttled_title')}, get message(){return t('throttled_message')}},
+  500: {get title(){return t('server_title')}, get message(){return t('server_message')}},
 };
 
 class ApiError extends Error {
   constructor(messages, status, code = '', retryAfter = 0) {
-    super(messages[0] || 'Ошибка запроса');
+    super(messages[0] || t('request_failed'));
     this.name = 'ApiError';
     this.messages = messages;
     this.status = status;
@@ -32,36 +33,37 @@ class ApiError extends Error {
 function errorDetails(error) {
   const status = Number(error?.status) || 0;
   if (error?.code === 'timeout') {
-    return {status, title: 'Сервер отвечает слишком долго', message: error.message};
+    return {status, title: t('timeout_title'), message: error.message};
   }
   if (status === 429) {
     const wait = Number(error?.retryAfter) || 0;
     return {
       status,
       title: HTTP_ERRORS[429].title,
-      message: wait ? `Лимит запросов исчерпан. Повторите попытку примерно через ${wait} сек.` : HTTP_ERRORS[429].message,
+      message: HTTP_ERRORS[429].message,
     };
   }
   const preset = status >= 500 ? HTTP_ERRORS[500] : HTTP_ERRORS[status];
   return {
     status,
-    title: preset?.title || 'Не удалось выполнить запрос',
-    message: preset?.message || error?.message || 'Попробуйте ещё раз.',
+    title: preset?.title || t('request_failed'),
+    message: preset?.message || error?.message || t('try_again'),
   };
 }
 
 function apiMessages(data) {
-  if (!data || typeof data !== 'object') return ['Ошибка запроса. Попробуйте ещё раз.'];
+  if (!data || typeof data !== 'object') return [t('request_error')];
+  const labels = fieldLabels();
   const messages = [];
   Object.entries(data).forEach(([field, value]) => {
     const values = Array.isArray(value) ? value : [value];
-    values.forEach(message => messages.push(field === 'detail' || field === 'non_field_errors' ? String(message) : `${FIELD_LABELS[field] || field}: ${message}`));
+    values.forEach(message => { const translated = translateServerMessage(message); messages.push(field === 'detail' || field === 'non_field_errors' ? translated : `${labels[field] || field}: ${translated}`); });
   });
-  return messages.length ? messages : ['Ошибка запроса. Попробуйте ещё раз.'];
+  return messages.length ? messages : [t('request_error')];
 }
 
 async function api(path, options = {}) {
-  const headers = {'Content-Type':'application/json', ...(options.headers || {})};
+  const headers = {'Content-Type':'application/json', 'Accept-Language':language(), ...(options.headers || {})};
   if (token()) headers.Authorization = `Token ${token()}`;
   const pageSignal = options.signal || window.pageSignal;
   const requestController = new AbortController();
@@ -75,7 +77,7 @@ async function api(path, options = {}) {
     response = await fetch(`${API}${path}`, {...options, headers, signal: requestController.signal});
   } catch (error) {
     if (!timedOut && pageSignal?.aborted) throw error;
-    if (timedOut) throw new ApiError(['Сервер не ответил за 10 секунд. Проверьте соединение и повторите загрузку.'], 0, 'timeout');
+    if (timedOut) throw new ApiError([t('timeout_message')], 0, 'timeout');
     throw new ApiError([HTTP_ERRORS[0].message], 0, 'network');
   } finally {
     clearTimeout(timeout);
@@ -91,7 +93,7 @@ async function api(path, options = {}) {
     const preset = response.status >= 500 ? HTTP_ERRORS[500] : HTTP_ERRORS[response.status];
     const retryAfter = Number(response.headers.get('Retry-After')) || 0;
     const messages = response.status === 429 && retryAfter
-      ? [`Лимит запросов исчерпан. Повторите попытку примерно через ${retryAfter} сек.`]
+      ? [HTTP_ERRORS[429].message]
       : (preset ? [preset.message] : apiMessages(data));
     throw new ApiError(messages, response.status, response.status === 429 ? 'throttled' : '', retryAfter);
   }
@@ -117,39 +119,39 @@ function notifyError(error) {
 
 function renderPageError(error) {
   const details = errorDetails(error);
-  const statusLabel = details.status ? `Ошибка ${details.status}` : 'Сетевая ошибка';
-  const loginAction = details.status === 401 ? '<a class="btn" href="#/login">Войти</a>' : '';
+  const statusLabel = details.status ? t('error_status', {status:details.status}) : t('network_error');
+  const loginAction = details.status === 401 ? `<a class="btn" href="#/login">${t('nav_login')}</a>` : '';
   app.removeAttribute('aria-busy');
   app.innerHTML = `<section class="page-error" role="alert" aria-live="assertive">
     <div class="page-error-code">${statusLabel}</div>
     <h1>${esc(details.title)}</h1>
     <p>${esc(details.message)}</p>
-    <div class="page-error-actions">${loginAction}<button class="btn${loginAction ? ' secondary' : ''}" id="page-retry" type="button">Повторить загрузку</button><a class="text-link" href="#/catalog">Перейти в каталог</a></div>
+    <div class="page-error-actions">${loginAction}<button class="btn${loginAction ? ' secondary' : ''}" id="page-retry" type="button">${t('retry_loading')}</button><a class="text-link" href="#/catalog">${t('go_catalog')}</a></div>
   </section>`;
   document.querySelector('#page-retry')?.addEventListener('click', router);
 }
 
 function poster(movie) {
-  return `<div class="poster">${movie.poster ? `<img src="${esc(movie.poster)}" alt="Постер: ${esc(movie.title)}" loading="lazy" decoding="async">` : `<span class="placeholder">${esc(movie.title.slice(0,1))}</span>`}<span class="badge">${esc(movie.age_rating || '0+')}</span></div>`;
+  return `<div class="poster">${movie.poster ? `<img src="${esc(movie.poster)}" alt="${t('poster')}: ${esc(movie.title)}" loading="lazy" decoding="async">` : `<span class="placeholder">${esc(movie.title.slice(0,1))}</span>`}<span class="badge">${esc(movie.age_rating || '0+')}</span></div>`;
 }
 
 function replaceBrokenPoster(image) {
   if (!(image instanceof HTMLImageElement) || !image.matches('.poster img')) return;
   const wrapper = image.closest('.poster');
-  const title = image.alt.replace(/^Постер:\s*/, '');
+  const title = image.alt.replace(/^[^:]+:\s*/, '');
   image.remove();
-  wrapper.insertAdjacentHTML('afterbegin', `<span class="placeholder" role="img" aria-label="Постер недоступен: ${esc(title)}">${esc(title.slice(0, 1) || 'К')}</span>`);
+  wrapper.insertAdjacentHTML('afterbegin', `<span class="placeholder" role="img" aria-label="${t('poster_unavailable')}: ${esc(title)}">${esc(title.slice(0, 1) || 'К')}</span>`);
 }
 
 function movieCard(movie) {
-  const rating = movie.rating_avg ? `★ ${Number(movie.rating_avg).toFixed(1)}` : 'Без оценки';
+  const rating = movie.rating_avg ? `★ ${Number(movie.rating_avg).toFixed(1)}` : t('no_rating');
   return `<a class="card" href="#/movie/${encodeURIComponent(movie.slug)}">${poster(movie)}<h3>${esc(movie.title)}</h3><div class="card-meta"><div class="meta">${movie.year} · ${esc(movie.country)}</div><div class="rating">${rating}</div></div></a>`;
 }
 
-const HOME_COLLECTIONS = [
-  {id: 'popular', title: 'Популярное', eyebrow: 'Кыргыз киносу', sort: 'popular'},
-  {id: 'newest', title: 'Новинки', eyebrow: 'Жаңы тасмалар', sort: 'newest'},
-  {id: 'rating', title: 'Высокий рейтинг', eyebrow: 'Көрүүчүлөрдүн тандоосу', sort: 'rating'},
+const homeCollections = () => [
+  {id:'popular', title:t('popular'), eyebrow:t('kyrgyz_cinema'), sort:'popular'},
+  {id:'newest', title:t('newest'), eyebrow:t('new_movies'), sort:'newest'},
+  {id:'rating', title:t('top_rating'), eyebrow:t('audience_choice'), sort:'rating'},
 ];
 
 function skeletonCards(count = 6) {
@@ -163,7 +165,7 @@ function skeletonCards(count = 6) {
 
 function homeShell() {
   return `
-    <section class="hero hero-skeleton" id="home-hero" aria-busy="true" aria-label="Загружается рекомендуемый фильм">
+    <section class="hero hero-skeleton" id="home-hero" aria-busy="true" aria-label="${t('hero_loading')}">
       <div class="hero-content">
         <div class="skeleton skeleton-kicker"></div>
         <div class="skeleton skeleton-heading"></div>
@@ -172,11 +174,11 @@ function homeShell() {
       </div>
     </section>
     <div class="home-collections">
-      ${HOME_COLLECTIONS.map(collection => `
+      ${homeCollections().map(collection => `
         <section class="section collection" aria-labelledby="${collection.id}-title">
           <div class="section-head">
             <div><div class="eyebrow">${collection.eyebrow}</div><h2 id="${collection.id}-title">${collection.title}</h2></div>
-            <a href="#/catalog">Весь каталог →</a>
+            <a href="#/catalog">${t('all_catalog')}</a>
           </div>
           <div class="grid" id="${collection.id}-grid" aria-live="polite" aria-busy="true">${skeletonCards()}</div>
         </section>`).join('')}
@@ -188,8 +190,8 @@ function renderHero(movie) {
   if (!movie) {
     target.className = 'hero hero-empty';
     target.removeAttribute('aria-busy');
-    target.setAttribute('aria-label', 'Рекомендуемый фильм пока не выбран');
-    target.innerHTML = '<div class="hero-content"><div class="eyebrow">Кыргыз киносу</div><h1>Скоро здесь будет премьера</h1><p>Добавьте опубликованный фильм, чтобы он появился на главной странице.</p><a class="btn secondary" href="#/catalog">Открыть каталог</a></div>';
+    target.setAttribute('aria-label', t('hero_empty_label'));
+    target.innerHTML = `<div class="hero-content"><div class="eyebrow">${t('kyrgyz_cinema')}</div><h1>${t('hero_empty_title')}</h1><p>${t('hero_empty_text')}</p><a class="btn secondary" href="#/catalog">${t('open_catalog')}</a></div>`;
     return;
   }
 
@@ -198,7 +200,7 @@ function renderHero(movie) {
   target.removeAttribute('aria-busy');
   target.removeAttribute('aria-label');
   if (heroImage) target.style.setProperty('--hero-image', `url("${heroImage.replace(/["\\]/g, '\\$&')}")`);
-  target.innerHTML = `<div class="hero-content"><div class="eyebrow">КиноОрдо сунуштайт</div><h1>${esc(movie.title)}</h1><div class="hero-meta"><span>${movie.year}</span><span>${esc(movie.country)}</span><span>${esc(movie.age_rating || '0+')}</span>${movie.rating_avg ? `<span>★ ${Number(movie.rating_avg).toFixed(1)}</span>` : ''}</div><p>${esc(movie.description)}</p><a class="btn" href="#/movie/${encodeURIComponent(movie.slug)}">Смотреть подробнее</a></div>`;
+  target.innerHTML = `<div class="hero-content"><div class="eyebrow">${t('recommended')}</div><h1>${esc(movie.title)}</h1><div class="hero-meta"><span>${movie.year}</span><span>${esc(movie.country)}</span><span>${esc(movie.age_rating || '0+')}</span>${movie.rating_avg ? `<span>★ ${Number(movie.rating_avg).toFixed(1)}</span>` : ''}</div><p>${esc(movie.description)}</p><a class="btn" href="#/movie/${encodeURIComponent(movie.slug)}">${t('details')}</a></div>`;
 }
 
 function renderCollection(collection, result) {
@@ -207,7 +209,7 @@ function renderCollection(collection, result) {
   target.removeAttribute('aria-busy');
 
   if (result.status === 'rejected') {
-    target.innerHTML = `<div class="collection-state"><strong>Не удалось загрузить подборку</strong><span>${esc(result.reason.message)}</span><button class="btn secondary" data-retry="${collection.id}">Повторить</button></div>`;
+    target.innerHTML = `<div class="collection-state"><strong>${t('collection_error')}</strong><span>${esc(result.reason.message)}</span><button class="btn secondary" data-retry="${collection.id}">${t('retry')}</button></div>`;
     target.querySelector('[data-retry]')?.addEventListener('click', () => loadCollection(collection));
     return;
   }
@@ -215,7 +217,7 @@ function renderCollection(collection, result) {
   const movies = result.value.results.slice(0, 6);
   target.innerHTML = movies.length
     ? movies.map(movieCard).join('')
-    : '<div class="collection-state"><strong>Здесь пока нет фильмов</strong><span>Подборка появится после добавления фильмов в каталог.</span></div>';
+    : `<div class="collection-state"><strong>${t('collection_empty')}</strong><span>${t('collection_empty_text')}</span></div>`;
 }
 
 async function loadCollection(collection) {
@@ -229,20 +231,21 @@ async function loadCollection(collection) {
 
 function setAuthControls() {
   document.querySelector('#auth-controls').innerHTML = token()
-    ? `<a class="profile-link" href="#/profile">Профиль</a><button class="btn secondary" id="logout">Выйти</button>`
-    : `<a class="btn secondary" href="#/login">Войти</a>`;
+    ? `<a class="profile-link" href="#/profile">${t('nav_profile')}</a><button class="btn secondary" id="logout">${t('nav_logout')}</button>`
+    : `<a class="btn secondary" href="#/login">${t('nav_login')}</a>`;
   document.querySelector('#logout')?.addEventListener('click', async () => {
     try { await api('/auth/logout/', {method:'POST'}); } catch (_) {}
-    localStorage.removeItem('kinomir_token'); setAuthControls(); location.hash = '#/'; toast('Вы вышли');
+    localStorage.removeItem('kinomir_token'); setAuthControls(); location.hash = '#/'; toast(t('logged_out'));
   });
 }
 
 async function home() {
   app.innerHTML = homeShell();
-  const results = await Promise.allSettled(HOME_COLLECTIONS.map(collection => api(`/movies/?sort=${collection.sort}&page_size=6`)));
+  const collections = homeCollections();
+  const results = await Promise.allSettled(collections.map(collection => api(`/movies/?sort=${collection.sort}&page_size=6`)));
   const popularMovies = results[0].status === 'fulfilled' ? results[0].value.results : [];
   renderHero(popularMovies.find(movie => movie.is_featured) || popularMovies[0]);
-  HOME_COLLECTIONS.forEach((collection, index) => renderCollection(collection, results[index]));
+  collections.forEach((collection, index) => renderCollection(collection, results[index]));
 }
 
 function catalogLink(apiUrl, label, className = 'btn secondary') {
@@ -264,16 +267,16 @@ async function catalog(params = new URLSearchParams()) {
   const totalPages = Math.max(1, Math.ceil(data.count / 4));
   const genreOptions = genres.map(genre => `<option value="${esc(genre.slug)}"${genre.slug === selectedGenre ? ' selected' : ''}>${esc(genre.name)}</option>`).join('');
   const sortOptions = [
-    ['newest', 'По дате добавления'],
-    ['title', 'По названию'],
-    ['rating', 'По рейтингу'],
+    ['newest', t('sort_newest')],
+    ['title', t('sort_title')],
+    ['rating', t('sort_rating')],
   ].map(([value, label]) => `<option value="${value}"${value === sort ? ' selected' : ''}>${label}</option>`).join('');
   const resultContent = data.results.length
     ? `<div id="catalog-grid" class="grid">${data.results.map(movieCard).join('')}</div>`
-    : '<div id="catalog-grid" class="collection-state"><strong>Ничего не найдено</strong><span>Попробуйте изменить запрос или сбросить фильтры.</span></div>';
-  const pagination = data.previous || data.next ? `<nav class="pagination" aria-label="Страницы каталога">${catalogLink(data.previous, '← Назад')}<span>Страница ${page} из ${totalPages}</span>${catalogLink(data.next, 'Дальше →')}</nav>` : '';
+    : `<div id="catalog-grid" class="collection-state"><strong>${t('nothing_found')}</strong><span>${t('nothing_found_text')}</span></div>`;
+  const pagination = data.previous || data.next ? `<nav class="pagination" aria-label="${t('pages')}">${catalogLink(data.previous, t('back'))}<span>${t('page_of', {page,total:totalPages})}</span>${catalogLink(data.next, t('next'))}</nav>` : '';
 
-  app.innerHTML = `<section class="section catalog-section"><div class="section-head"><div><div class="eyebrow">Коллекция</div><h2>Каталог фильмов</h2></div><span class="catalog-summary">Найдено: ${data.count}</span></div><form class="filters" id="filters"><input class="field" name="q" value="${esc(query)}" placeholder="Название или описание"><select class="field" name="genre"><option value="">Все жанры</option>${genreOptions}</select><input class="field" name="year" type="number" min="1888" max="2100" value="${esc(year)}" placeholder="Год"><select class="field" name="sort">${sortOptions}</select><button class="btn">Применить</button><a class="filter-reset" href="#/catalog">Сбросить</a></form>${resultContent}${pagination}</section>`;
+  app.innerHTML = `<section class="section catalog-section"><div class="section-head"><div><div class="eyebrow">${t('catalog_collection')}</div><h2>${t('catalog_title')}</h2></div><span class="catalog-summary">${t('found',{count:data.count})}</span></div><form class="filters" id="filters"><input class="field" name="q" value="${esc(query)}" placeholder="${t('search_placeholder')}"><select class="field" name="genre"><option value="">${t('all_genres')}</option>${genreOptions}</select><input class="field" name="year" type="number" min="1888" max="2100" value="${esc(year)}" placeholder="${t('year')}"><select class="field" name="sort">${sortOptions}</select><button class="btn">${t('apply')}</button><a class="filter-reset" href="#/catalog">${t('reset')}</a></form>${resultContent}${pagination}</section>`;
   document.querySelector('#filters').addEventListener('submit', event => {
     event.preventDefault();
     const nextParams = new URLSearchParams(new FormData(event.currentTarget));
@@ -295,30 +298,30 @@ function playerMarkup(movie) {
   const {mode, url} = movie.player;
   if (mode === 'html5') {
     const posterUrl = movie.banner || movie.poster;
-    return `<div class="video-player" id="video-player" tabindex="0" aria-label="Видеоплеер: ${esc(movie.title)}">
+    return `<div class="video-player" id="video-player" tabindex="0" aria-label="${t('video_player')}: ${esc(movie.title)}">
       <video id="movie-video" src="${esc(url)}"${posterUrl ? ` poster="${esc(posterUrl)}"` : ''} controls preload="metadata" playsinline></video>
-      <button class="video-center-play" id="video-center-play" type="button" aria-label="Воспроизвести"><span aria-hidden="true">▶</span></button>
+      <button class="video-center-play" id="video-center-play" type="button" aria-label="${t('play')}"><span aria-hidden="true">▶</span></button>
       <div class="video-loading" aria-hidden="true"><span></span></div>
-      <div class="video-error" id="video-error" role="alert" hidden><strong>Видео не удалось загрузить</strong><span>Проверьте подключение и повторите попытку.</span><button class="btn secondary" id="video-retry" type="button">Повторить</button></div>
+      <div class="video-error" id="video-error" role="alert" hidden><strong>${t('video_error')}</strong><span>${t('video_error_hint')}</span><button class="btn secondary" id="video-retry" type="button">${t('retry')}</button></div>
       <div class="video-controls" id="video-controls">
-        <button class="control-button" id="video-toggle" type="button" aria-label="Воспроизвести" title="Воспроизвести (Пробел)"><span aria-hidden="true">▶</span></button>
-        <button class="control-button skip-control" id="video-back" type="button" aria-label="Назад на 10 секунд" title="Назад на 10 секунд">−10</button>
-        <button class="control-button skip-control" id="video-forward" type="button" aria-label="Вперёд на 10 секунд" title="Вперёд на 10 секунд">+10</button>
-        <div class="video-timeline"><input id="video-seek" type="range" min="0" max="1000" value="0" aria-label="Позиция воспроизведения"><span id="video-time">0:00 / 0:00</span></div>
-        <button class="control-button" id="video-mute" type="button" aria-label="Выключить звук" title="Звук (M)"><span aria-hidden="true">🔊</span></button>
-        <input class="volume-control" id="video-volume" type="range" min="0" max="1" step="0.05" value="1" aria-label="Громкость">
-        <label class="speed-control">Скорость<select id="video-speed" aria-label="Скорость воспроизведения"><option value="0.5">0.5×</option><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option></select></label>
-        <button class="control-button" id="video-fullscreen" type="button" aria-label="Полноэкранный режим" title="Полноэкранный режим (F)"><span aria-hidden="true">⛶</span></button>
+        <button class="control-button" id="video-toggle" type="button" aria-label="${t('play')}" title="${t('play')}"><span aria-hidden="true">▶</span></button>
+        <button class="control-button skip-control" id="video-back" type="button" aria-label="${t('back_10')}" title="${t('back_10')}">−10</button>
+        <button class="control-button skip-control" id="video-forward" type="button" aria-label="${t('forward_10')}" title="${t('forward_10')}">+10</button>
+        <div class="video-timeline"><input id="video-seek" type="range" min="0" max="1000" value="0" aria-label="${t('playback_position')}"><span id="video-time">0:00 / 0:00</span></div>
+        <button class="control-button" id="video-mute" type="button" aria-label="${t('mute')}" title="${t('mute')}"><span aria-hidden="true">🔊</span></button>
+        <input class="volume-control" id="video-volume" type="range" min="0" max="1" step="0.05" value="1" aria-label="${t('volume')}">
+        <label class="speed-control">${t('speed')}<select id="video-speed" aria-label="${t('speed')}"><option value="0.5">0.5×</option><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option></select></label>
+        <button class="control-button" id="video-fullscreen" type="button" aria-label="${t('fullscreen')}" title="${t('fullscreen')}"><span aria-hidden="true">⛶</span></button>
       </div>
     </div>`;
   }
-  if (mode === 'embed') return `<div class="player embed-player"><iframe src="${esc(url)}" title="Проигрыватель: ${esc(movie.title)}" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen loading="lazy" referrerpolicy="strict-origin-when-cross-origin"></iframe><p class="player-note">Скорость и полный экран доступны в панели встроенного плеера.</p></div>`;
-  if (mode === 'external') return `<div class="player player-state"><div><div class="player-state-icon" aria-hidden="true">↗</div><strong>Фильм доступен на внешней площадке</strong><p>Просмотр откроется в новой безопасной вкладке.</p><a class="btn" href="${esc(url)}" target="_blank" rel="noopener noreferrer">Открыть легальный источник</a></div></div>`;
-  return '<div class="player player-state"><div><div class="player-state-icon" aria-hidden="true">!</div><strong>Видео временно недоступно</strong><p>Мы сохранили информацию о фильме. Источник просмотра появится позже.</p></div></div>';
+  if (mode === 'embed') return `<div class="player embed-player"><iframe src="${esc(url)}" title="${t('video_player')}: ${esc(movie.title)}" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen loading="lazy" referrerpolicy="strict-origin-when-cross-origin"></iframe><p class="player-note">${t('embed_hint')}</p></div>`;
+  if (mode === 'external') return `<div class="player player-state"><div><div class="player-state-icon" aria-hidden="true">↗</div><strong>${t('external_movie')}</strong><p>${t('external_hint')}</p><a class="btn" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${t('open_legal_source')}</a></div></div>`;
+  return `<div class="player player-state"><div><div class="player-state-icon" aria-hidden="true">!</div><strong>${t('video_unavailable')}</strong><p>${t('video_unavailable_hint')}</p></div></div>`;
 }
 
 function videoKind(movie) {
-  return /video\.kinoafisha\.info\/video-/i.test(movie.player?.url || '') ? 'Трейлер' : 'Смотреть';
+  return /video\.kinoafisha\.info\/video-/i.test(movie.player?.url || '') ? t('trailer') : t('watch');
 }
 
 function initVideoPlayer() {
@@ -344,8 +347,8 @@ function initVideoPlayer() {
   const updatePlayState = () => {
     const playing = !video.paused && !video.ended;
     toggleButton.innerHTML = `<span aria-hidden="true">${playing ? '❚❚' : '▶'}</span>`;
-    toggleButton.setAttribute('aria-label', playing ? 'Пауза' : 'Воспроизвести');
-    toggleButton.title = playing ? 'Пауза (Пробел)' : 'Воспроизвести (Пробел)';
+    toggleButton.setAttribute('aria-label', t(playing ? 'pause' : 'play'));
+    toggleButton.title = t(playing ? 'pause' : 'play');
     centerButton.classList.toggle('is-hidden', playing);
     shell.classList.toggle('is-playing', playing);
   };
@@ -357,7 +360,7 @@ function initVideoPlayer() {
   };
   const togglePlay = async () => {
     if (video.paused || video.ended) {
-      try { await video.play(); } catch (_) { toast('Браузер не разрешил воспроизведение'); }
+      try { await video.play(); } catch (_) { toast(t('playback_blocked')); }
     } else video.pause();
   };
   const toggleFullscreen = async () => {
@@ -365,13 +368,13 @@ function initVideoPlayer() {
       if (document.fullscreenElement) await document.exitFullscreen();
       else if (shell.requestFullscreen) await shell.requestFullscreen();
       else if (video.webkitEnterFullscreen) video.webkitEnterFullscreen();
-      else toast('Полноэкранный режим не поддерживается');
-    } catch (_) { toast('Полноэкранный режим недоступен'); }
+      else toast(t('fullscreen_unsupported'));
+    } catch (_) { toast(t('fullscreen_unavailable')); }
   };
   const setMutedIcon = () => {
     const muted = video.muted || video.volume === 0;
     mute.innerHTML = `<span aria-hidden="true">${muted ? '🔇' : '🔊'}</span>`;
-    mute.setAttribute('aria-label', muted ? 'Включить звук' : 'Выключить звук');
+    mute.setAttribute('aria-label', t(muted ? 'unmute' : 'mute'));
   };
 
   playButtons.forEach(button => button.addEventListener('click', togglePlay));
@@ -391,10 +394,10 @@ function initVideoPlayer() {
   shell.querySelector('#video-forward').addEventListener('click', () => { video.currentTime = Math.min(video.duration || Infinity, video.currentTime + 10); });
   mute.addEventListener('click', () => { video.muted = !video.muted; setMutedIcon(); });
   volume.addEventListener('input', () => { video.volume = Number(volume.value); video.muted = video.volume === 0; volume.style.setProperty('--progress', `${video.volume * 100}%`); setMutedIcon(); });
-  speed.addEventListener('change', () => { video.playbackRate = Number(speed.value); toast(`Скорость: ${speed.options[speed.selectedIndex].text}`); });
+  speed.addEventListener('change', () => { video.playbackRate = Number(speed.value); toast(`${t('speed')}: ${speed.options[speed.selectedIndex].text}`); });
   fullscreen.addEventListener('click', toggleFullscreen);
   shell.querySelector('#video-retry').addEventListener('click', () => { errorState.hidden = true; controls.hidden = false; centerButton.hidden = false; video.load(); });
-  document.addEventListener('fullscreenchange', () => { const active = Boolean(document.fullscreenElement); fullscreen.setAttribute('aria-label', active ? 'Выйти из полноэкранного режима' : 'Полноэкранный режим'); fullscreen.title = active ? 'Выйти из полноэкранного режима (F)' : 'Полноэкранный режим (F)'; }, {signal: playerSignal});
+  document.addEventListener('fullscreenchange', () => { const active = Boolean(document.fullscreenElement); fullscreen.setAttribute('aria-label', t(active ? 'exit_fullscreen' : 'fullscreen')); fullscreen.title = t(active ? 'exit_fullscreen' : 'fullscreen'); }, {signal: playerSignal});
   shell.addEventListener('keydown', event => {
     if (event.target.matches('select, input')) return;
     if ([' ', 'k', 'K'].includes(event.key)) { event.preventDefault(); togglePlay(); }
@@ -408,7 +411,7 @@ function initVideoPlayer() {
 }
 
 function commentMarkup(comment) {
-  const date = new Intl.DateTimeFormat('ru-RU', {day:'numeric', month:'short', year:'numeric'}).format(new Date(comment.created_at));
+  const date = new Intl.DateTimeFormat(language() === 'ky' ? 'ky-KG' : 'ru-RU', {day:'numeric', month:'short', year:'numeric'}).format(new Date(comment.created_at));
   return `<div class="comment" data-comment-id="${Number(comment.id)}"><div><strong>${esc(comment.username)}</strong><small>${esc(date)}</small></div><p>${esc(comment.text)}</p></div>`;
 }
 
@@ -416,42 +419,42 @@ function legalMarkup(legal = {}) {
   const source = safeExternalUrl(legal.content_source_url);
   const posterSource = safeExternalUrl(legal.poster_source_url);
   const videoSource = safeExternalUrl(legal.video_source_url);
-  const sourceLink = (url, label) => url ? `<a href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>` : '<span>не указан</span>';
+  const sourceLink = (url, label) => url ? `<a href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>` : `<span>${t('not_listed')}</span>`;
   return `<section class="legal-card" aria-labelledby="legal-title">
-    <div><div class="eyebrow">Права и источники</div><h2 id="legal-title">Информация о контенте</h2></div>
+    <div><div class="eyebrow">${t('rights_sources')}</div><h2 id="legal-title">${t('content_info')}</h2></div>
     <dl class="legal-meta">
-      <div><dt>Материал</dt><dd>${esc(legal.video_content_label || 'не указан')}</dd></div>
-      <div><dt>Правообладатель</dt><dd>${esc(legal.rights_holder || 'уточняется')}</dd></div>
-      <div><dt>Лицензия</dt><dd>${esc(legal.license_label || 'не указана')}</dd></div>
-      <div><dt>Проверка</dt><dd><span class="rights-status rights-status-${esc(legal.rights_status || 'pending')}">${esc(legal.rights_status_label || 'ожидает проверки')}</span></dd></div>
-      <div><dt>Сведения о правах</dt><dd>${sourceLink(source, 'Открыть источник')}</dd></div>
+      <div><dt>${t('material')}</dt><dd>${esc(legal.video_content_label || t('not_listed'))}</dd></div>
+      <div><dt>${t('rights_holder')}</dt><dd>${esc(legal.rights_holder || t('being_clarified'))}</dd></div>
+      <div><dt>${t('license')}</dt><dd>${esc(legal.license_label || t('not_listed'))}</dd></div>
+      <div><dt>${t('verification')}</dt><dd><span class="rights-status rights-status-${esc(legal.rights_status || 'pending')}">${esc(legal.rights_status_label || t('pending_review'))}</span></dd></div>
+      <div><dt>${t('rights_details')}</dt><dd>${sourceLink(source, t('open_source'))}</dd></div>
     </dl>
-    ${legal.video_attribution ? `<p class="attribution"><strong>Видео:</strong> ${esc(legal.video_attribution)} · ${sourceLink(videoSource, 'источник')}</p>` : ''}
-    ${legal.poster_attribution ? `<p class="attribution"><strong>Постер:</strong> ${esc(legal.poster_attribution)} · ${sourceLink(posterSource, 'источник')}</p>` : ''}
+    ${legal.video_attribution ? `<p class="attribution"><strong>Видео:</strong> ${esc(legal.video_attribution)} · ${sourceLink(videoSource, t('source'))}</p>` : ''}
+    ${legal.poster_attribution ? `<p class="attribution"><strong>${t('poster')}:</strong> ${esc(legal.poster_attribution)} · ${sourceLink(posterSource, t('source'))}</p>` : ''}
   </section>`;
 }
 
 async function movie(slug) {
   const m = await api(`/movies/${encodeURIComponent(slug)}/`);
-  const comments = m.comments.length ? m.comments.map(commentMarkup).join('') : '<div class="comments-empty">Комментариев пока нет. Начните обсуждение первым.</div>';
-  const guestNote = token() ? '' : '<div class="social-auth-note">Чтобы добавлять фильмы, ставить оценки и писать комментарии, <a href="#/login">войдите в аккаунт</a>.</div>';
+  const comments = m.comments.length ? m.comments.map(commentMarkup).join('') : `<div class="comments-empty">${t('comments_empty')}</div>`;
+  const guestNote = token() ? '' : `<div class="social-auth-note"><a href="#/login">${t('login_to_discuss')}</a></div>`;
   app.innerHTML = `<article class="detail">
     <aside class="detail-poster">${poster(m)}</aside>
     <div class="detail-content">
       <div class="eyebrow">${esc(m.genres.map(g=>g.name).join(' · '))}</div>
       <h1>${esc(m.title)}</h1>
       <div class="meta">${esc(m.original_title)}</div>
-      <div class="facts"><span>${m.year}</span><span>${esc(m.country)}</span><span>${m.duration} мин</span><span id="movie-rating-summary">★ ${m.rating_avg ? Number(m.rating_avg).toFixed(1) : '—'} (${m.ratings_count})</span></div>
+      <div class="facts"><span>${m.year}</span><span>${esc(m.country)}</span><span>${m.duration} ${t('minutes')}</span><span id="movie-rating-summary">★ ${m.rating_avg ? Number(m.rating_avg).toFixed(1) : '—'} (${m.ratings_count})</span></div>
       <p class="movie-description">${esc(m.description)}</p>
-      <p><strong>Режиссёр:</strong> ${esc(m.director || 'не указан')}<br><strong>В ролях:</strong> ${esc(m.actors || 'не указаны')}</p>
-      <section class="watch-section"><div class="watch-head"><div><div class="eyebrow">${videoKind(m)}</div><h2>${esc(m.title)}</h2></div><span>Пробел — пауза · ← → — 10 сек · F — полный экран</span></div>${playerMarkup(m)}</section>
+      <p><strong>${t('director')}:</strong> ${esc(m.director || t('not_listed'))}<br><strong>${t('cast')}:</strong> ${esc(m.actors || t('not_listed_plural'))}</p>
+      <section class="watch-section"><div class="watch-head"><div><div class="eyebrow">${videoKind(m)}</div><h2>${esc(m.title)}</h2></div><span>${t('player_shortcuts')}</span></div>${playerMarkup(m)}</section>
       ${legalMarkup(m.legal)}
-      <section class="social-panel" aria-label="Действия с фильмом">
-        <div><div><div class="social-label">Избранное</div><h2>Сохранить фильм</h2></div><button class="btn ${m.is_favorite ? 'is-selected' : ''}" id="favorite" type="button" aria-pressed="${m.is_favorite}">${m.is_favorite ? '✓ В избранном' : 'В избранное'}</button></div>
-        <div><div><div class="social-label">Личная оценка</div><h2>${m.user_rating ? `${m.user_rating} из 5` : 'Пока не оценён'}</h2></div><div class="stars" id="rating-stars">${[1,2,3,4,5].map(n=>`<button type="button" data-rating="${n}" class="${n <= (m.user_rating || 0) ? 'active':''}" aria-label="${n} из 5" aria-pressed="${n === m.user_rating}">★</button>`).join('')}</div></div>
+      <section class="social-panel" aria-label="${t('movie_actions')}">
+        <div><div><div class="social-label">${t('nav_favorites')}</div><h2>${t('save_movie')}</h2></div><button class="btn ${m.is_favorite ? 'is-selected' : ''}" id="favorite" type="button" aria-pressed="${m.is_favorite}">${t(m.is_favorite ? 'favorite_added' : 'favorite_add')}</button></div>
+        <div><div><div class="social-label">${t('personal_rating')}</div><h2>${m.user_rating ? t('rating_of',{value:m.user_rating}) : t('not_rated')}</h2></div><div class="stars" id="rating-stars">${[1,2,3,4,5].map(n=>`<button type="button" data-rating="${n}" class="${n <= (m.user_rating || 0) ? 'active':''}" aria-label="${t('rating_of',{value:n})}" aria-pressed="${n === m.user_rating}">★</button>`).join('')}</div></div>
         ${guestNote}
       </section>
-      <section class="comments"><div class="comments-heading"><div><div class="eyebrow">Обсуждение</div><h2>Комментарии</h2></div><span id="comments-count">${m.comments.length}</span></div>${token()?'<form id="comment-form" novalidate><label for="comment-text">Ваш комментарий</label><textarea class="field" id="comment-text" name="text" maxlength="1000" required placeholder="Поделитесь впечатлением о фильме"></textarea><div class="comment-form-footer"><span id="comment-counter">0 / 1000</span><button class="btn" type="submit">Отправить</button></div><div id="comment-error" role="alert" aria-live="polite"></div></form>':'<div class="comment-login-note"><a href="#/login">Войдите в аккаунт</a>, чтобы присоединиться к обсуждению.</div>'}<div id="comment-list">${comments}</div></section>
+      <section class="comments"><div class="comments-heading"><div><div class="eyebrow">${t('discussion')}</div><h2>${t('comments')}</h2></div><span id="comments-count">${m.comments.length}</span></div>${token()?`<form id="comment-form" novalidate><label for="comment-text">${t('your_comment')}</label><textarea class="field" id="comment-text" name="text" maxlength="1000" required placeholder="${t('comment_placeholder')}"></textarea><div class="comment-form-footer"><span id="comment-counter">0 / 1000</span><button class="btn" type="submit">${t('send')}</button></div><div id="comment-error" role="alert" aria-live="polite"></div></form>`:`<div class="comment-login-note"><a href="#/login">${t('login_to_discuss')}</a></div>`}<div id="comment-list">${comments}</div></section>
     </div>
   </article>`;
   initVideoPlayer();
@@ -461,10 +464,10 @@ async function movie(slug) {
     button.disabled = true;
     try {
       const result = await api(`/movies/${encodeURIComponent(slug)}/favorite/`, {method:'POST'});
-      button.textContent = result.is_favorite ? '✓ В избранном' : 'В избранное';
+      button.textContent = t(result.is_favorite ? 'favorite_added' : 'favorite_add');
       button.classList.toggle('is-selected', result.is_favorite);
       button.setAttribute('aria-pressed', String(result.is_favorite));
-      toast(result.is_favorite ? 'Добавлено в избранное' : 'Удалено из избранного');
+      toast(t(result.is_favorite ? 'favorite_toast' : 'favorite_removed'));
     } catch (error) { notifyError(error); }
     finally { button.disabled = false; }
   };
@@ -476,9 +479,9 @@ async function movie(slug) {
     try {
       const result = await api(`/movies/${encodeURIComponent(slug)}/rating/`, {method:'PUT', body:JSON.stringify({value})});
       buttons.forEach(item => { item.classList.toggle('active', Number(item.dataset.rating) <= value); item.setAttribute('aria-pressed', String(Number(item.dataset.rating) === value)); });
-      document.querySelector('#rating-stars').previousElementSibling.querySelector('h2').textContent = `${value} из 5`;
+      document.querySelector('#rating-stars').previousElementSibling.querySelector('h2').textContent = t('rating_of',{value});
       document.querySelector('#movie-rating-summary').textContent = `★ ${Number(result.rating_avg).toFixed(1)} (${result.ratings_count})`;
-      toast(`Ваша оценка: ${value} из 5`);
+      toast(t('your_rating',{value}));
     } catch (error) { notifyError(error); }
     finally { buttons.forEach(item => item.disabled = false); }
   });
@@ -491,7 +494,7 @@ async function movie(slug) {
     form.onsubmit = async event => {
       event.preventDefault();
       const text = textarea.value.trim();
-      if (!text) { errorNode.innerHTML = '<div class="error">Напишите комментарий перед отправкой.</div>'; textarea.focus(); return; }
+      if (!text) { errorNode.innerHTML = `<div class="error">${t('comment_empty')}</div>`; textarea.focus(); return; }
       const submit = form.querySelector('button[type="submit"]');
       submit.disabled = true;
       try {
@@ -501,7 +504,7 @@ async function movie(slug) {
         const count = document.querySelectorAll('[data-comment-id]').length;
         document.querySelector('#comments-count').textContent = String(count);
         form.reset(); counter.textContent = '0 / 1000'; errorNode.innerHTML = '';
-        toast('Комментарий опубликован');
+        toast(t('comment_published'));
       } catch (error) {
         errorNode.innerHTML = `<div class="error">${esc((error.messages || [error.message])[0])}</div>`;
       } finally { submit.disabled = false; }
@@ -533,7 +536,7 @@ function legalPage(kind) {
 function authPage(mode) {
   const register = mode === 'register';
   if (token()) { location.hash = '#/profile'; return; }
-  app.innerHTML = `<section class="auth-card"><div class="eyebrow">Аккаунт</div><h1>${register?'Регистрация':'Вход'}</h1><form id="auth-form" novalidate><label>Имя пользователя<input class="field" name="username" minlength="3" maxlength="150" autocomplete="username" required placeholder="Например, azam"></label>${register?'<label>Email<input class="field" name="email" type="email" autocomplete="email" required placeholder="name@example.com"></label>':''}<label>Пароль<input class="field" name="password" type="password" minlength="8" autocomplete="${register?'new-password':'current-password'}" required placeholder="Минимум 8 символов"></label>${register?'<label>Повторите пароль<input class="field" name="password_confirm" type="password" minlength="8" autocomplete="new-password" required placeholder="Введите пароль ещё раз"></label>':''}<div id="auth-error" role="alert" aria-live="polite"></div><button class="btn" type="submit">${register?'Создать аккаунт':'Войти'}</button></form><p>${register?'Уже зарегистрированы? <a href="#/login">Войти</a>':'Нет аккаунта? <a href="#/register">Регистрация</a><br><a href="#/password-reset">Забыли пароль?</a>'}</p></section>`;
+  app.innerHTML = `<section class="auth-card"><div class="eyebrow">${t('account')}</div><h1>${t(register?'register':'login')}</h1><form id="auth-form" novalidate><label>${t('username')}<input class="field" name="username" minlength="3" maxlength="150" autocomplete="username" required placeholder="${t('username_example')}"></label>${register?'<label>Email<input class="field" name="email" type="email" autocomplete="email" required placeholder="name@example.com"></label>':''}<label>${t('password')}<input class="field" name="password" type="password" minlength="8" autocomplete="${register?'new-password':'current-password'}" required placeholder="${t('password_min')}"></label>${register?`<label>${t('repeat_password')}<input class="field" name="password_confirm" type="password" minlength="8" autocomplete="new-password" required placeholder="${t('repeat_password_hint')}"></label>`:''}<div id="auth-error" role="alert" aria-live="polite"></div><button class="btn" type="submit">${t(register?'create_account':'nav_login')}</button></form><p>${register?`${t('already_registered')} <a href="#/login">${t('nav_login')}</a>`:`${t('no_account')} <a href="#/register">${t('register')}</a><br><a href="#/password-reset">${t('forgot_password')}</a>`}</p></section>`;
   document.querySelector('#auth-form').onsubmit = async e => {
     e.preventDefault();
     const form = e.target;
@@ -541,7 +544,7 @@ function authPage(mode) {
     if (!form.reportValidity()) return;
     const body = Object.fromEntries(new FormData(form));
     if (register && body.password !== body.password_confirm) {
-      errorNode.innerHTML = '<div class="error">Пароли не совпадают.</div>';
+      errorNode.innerHTML = `<div class="error">${t('passwords_mismatch')}</div>`;
       return;
     }
     delete body.password_confirm;
@@ -553,10 +556,10 @@ function authPage(mode) {
       localStorage.setItem('kinomir_token', result.token);
       setAuthControls();
       location.hash = '#/profile';
-      toast(register ? 'Аккаунт создан' : 'Вы вошли');
+      toast(t(register ? 'account_created' : 'logged_in'));
     } catch (error) {
       const messages = error.messages || [error.message];
-      errorNode.innerHTML = `<div class="error"><strong>Проверьте данные:</strong><ul>${messages.map(message => `<li>${esc(message)}</li>`).join('')}</ul></div>`;
+      errorNode.innerHTML = `<div class="error"><strong>${t('check_data')}</strong><ul>${messages.map(message => `<li>${esc(translateServerMessage(message))}</li>`).join('')}</ul></div>`;
     } finally {
       button.disabled = false;
     }
@@ -564,12 +567,12 @@ function authPage(mode) {
 }
 
 function formError(node, error) {
-  const messages = error.messages || [error.message || 'Не удалось выполнить запрос.'];
+  const messages = error.messages || [error.message || t('request_failed')];
   node.innerHTML = `<div class="error"><ul>${messages.map(message => `<li>${esc(message)}</li>`).join('')}</ul></div>`;
 }
 
 function passwordResetRequestPage() {
-  app.innerHTML = `<section class="auth-card"><div class="eyebrow">Безопасность аккаунта</div><h1>Восстановление пароля</h1><p>Укажите email аккаунта. Ответ будет одинаковым независимо от того, зарегистрирован адрес или нет.</p><form id="password-reset-request-form" novalidate><label>Email<input class="field" name="email" type="email" autocomplete="email" required placeholder="name@example.com"></label><div id="account-form-message" role="status" aria-live="polite"></div><button class="btn" type="submit">Отправить инструкцию</button></form><p><a href="#/login">Вернуться ко входу</a></p></section>`;
+  app.innerHTML = `<section class="auth-card"><div class="eyebrow">${t('account_security')}</div><h1>${t('reset_password')}</h1><p>${t('reset_intro')}</p><form id="password-reset-request-form" novalidate><label>Email<input class="field" name="email" type="email" autocomplete="email" required placeholder="name@example.com"></label><div id="account-form-message" role="status" aria-live="polite"></div><button class="btn" type="submit">${t('send_instruction')}</button></form><p><a href="#/login">${t('return_login')}</a></p></section>`;
   const form = document.querySelector('#password-reset-request-form');
   form.onsubmit = async event => {
     event.preventDefault();
@@ -579,7 +582,7 @@ function passwordResetRequestPage() {
     button.disabled = true; message.innerHTML = '';
     try {
       const result = await api('/auth/password-reset/request/', {method:'POST', body:JSON.stringify(Object.fromEntries(new FormData(form)))});
-      message.innerHTML = `<div class="success">${esc(result.detail)}</div>`;
+      message.innerHTML = `<div class="success">${esc(translateServerMessage(result.detail))}</div>`;
       form.reset();
     } catch (error) { formError(message, error); }
     finally { button.disabled = false; }
@@ -588,7 +591,7 @@ function passwordResetRequestPage() {
 
 function passwordResetConfirmPage(params) {
   const resetToken = params.get('token') || '';
-  app.innerHTML = `<section class="auth-card"><div class="eyebrow">Безопасность аккаунта</div><h1>Новый пароль</h1>${resetToken ? `<form id="password-reset-confirm-form" novalidate><label>Новый пароль<input class="field" name="password" type="password" minlength="8" autocomplete="new-password" required></label><label>Повторите пароль<input class="field" name="password_confirm" type="password" minlength="8" autocomplete="new-password" required></label><div id="account-form-message" role="alert" aria-live="polite"></div><button class="btn" type="submit">Изменить пароль</button></form>` : '<div class="error">В ссылке отсутствует токен восстановления.</div>'}<p><a href="#/login">Вернуться ко входу</a></p></section>`;
+  app.innerHTML = `<section class="auth-card"><div class="eyebrow">${t('account_security')}</div><h1>${t('new_password')}</h1>${resetToken ? `<form id="password-reset-confirm-form" novalidate><label>${t('new_password')}<input class="field" name="password" type="password" minlength="8" autocomplete="new-password" required></label><label>${t('repeat_password')}<input class="field" name="password_confirm" type="password" minlength="8" autocomplete="new-password" required></label><div id="account-form-message" role="alert" aria-live="polite"></div><button class="btn" type="submit">${t('change_password')}</button></form>` : `<div class="error">${t('missing_reset_token')}</div>`}<p><a href="#/login">${t('return_login')}</a></p></section>`;
   const form = document.querySelector('#password-reset-confirm-form');
   if (!form) return;
   form.onsubmit = async event => {
@@ -596,18 +599,18 @@ function passwordResetConfirmPage(params) {
     if (!form.reportValidity()) return;
     const body = Object.fromEntries(new FormData(form));
     const message = document.querySelector('#account-form-message');
-    if (body.password !== body.password_confirm) { message.innerHTML = '<div class="error">Пароли не совпадают.</div>'; return; }
+    if (body.password !== body.password_confirm) { message.innerHTML = `<div class="error">${t('passwords_mismatch')}</div>`; return; }
     const button = form.querySelector('button'); button.disabled = true; message.innerHTML = '';
     try {
       const result = await api('/auth/password-reset/confirm/', {method:'POST', body:JSON.stringify({...body, token:resetToken})});
-      app.innerHTML = `<section class="auth-card"><div class="eyebrow">Готово</div><h1>Пароль изменён</h1><p>${esc(result.detail)}</p><a class="btn" href="#/login">Войти</a></section>`;
+      app.innerHTML = `<section class="auth-card"><div class="eyebrow">${t('done')}</div><h1>${t('password_changed')}</h1><p>${esc(translateServerMessage(result.detail))}</p><a class="btn" href="#/login">${t('nav_login')}</a></section>`;
     } catch (error) { formError(message, error); button.disabled = false; }
   };
 }
 
 function emailConfirmPage(params) {
   const confirmationToken = params.get('token') || '';
-  app.innerHTML = `<section class="auth-card"><div class="eyebrow">Email</div><h1>Подтверждение адреса</h1>${confirmationToken ? '<p>Нажмите кнопку, чтобы подтвердить новый email. Ссылка сработает только один раз.</p><form id="email-confirm-form"><div id="account-form-message" role="alert" aria-live="polite"></div><button class="btn" type="submit">Подтвердить email</button></form>' : '<div class="error">В ссылке отсутствует токен подтверждения.</div>'}<p><a href="#/profile">Вернуться в профиль</a></p></section>`;
+  app.innerHTML = `<section class="auth-card"><div class="eyebrow">Email</div><h1>${t('email_confirmation')}</h1>${confirmationToken ? `<p>${t('email_confirm_intro')}</p><form id="email-confirm-form"><div id="account-form-message" role="alert" aria-live="polite"></div><button class="btn" type="submit">${t('confirm_email')}</button></form>` : `<div class="error">${t('missing_email_token')}</div>`}<p><a href="#/profile">${t('return_profile')}</a></p></section>`;
   const form = document.querySelector('#email-confirm-form');
   if (!form) return;
   form.onsubmit = async event => {
@@ -616,7 +619,7 @@ function emailConfirmPage(params) {
     button.disabled = true;
     try {
       const result = await api('/auth/email-change/confirm/', {method:'POST', body:JSON.stringify({token:confirmationToken})});
-      message.innerHTML = `<div class="success">${esc(result.detail)}</div>`;
+      message.innerHTML = `<div class="success">${esc(translateServerMessage(result.detail))}</div>`;
       button.remove();
     } catch (error) { formError(message, error); button.disabled = false; }
   };
@@ -624,15 +627,15 @@ function emailConfirmPage(params) {
 
 async function favorites() {
   if (!token()) return location.hash='#/login';
-  const movies=await api('/favorites/'); app.innerHTML=`<section class="section"><div class="section-head"><h2>Избранное</h2></div><div class="grid">${movies.length?movies.map(movieCard).join(''):'<div class="empty">Здесь пока нет фильмов</div>'}</div></section>`;
+  const movies=await api('/favorites/'); app.innerHTML=`<section class="section"><div class="section-head"><h2>${t('nav_favorites')}</h2></div><div class="grid">${movies.length?movies.map(movieCard).join(''):`<div class="empty">${t('favorites_empty')}</div>`}</div></section>`;
 }
 
 async function profile() {
   if (!token()) return location.hash = '#/login';
   try {
     const user = await api('/auth/me/');
-    const joined = new Intl.DateTimeFormat('ru-RU', {day:'numeric', month:'long', year:'numeric'}).format(new Date(user.date_joined));
-    app.innerHTML = `<section class="profile-card"><div class="profile-avatar" aria-hidden="true">${esc(user.username.slice(0, 1).toUpperCase())}</div><div class="eyebrow">Личный профиль</div><h1>${esc(user.username)}</h1><p class="profile-intro">Здесь хранятся данные вашего аккаунта КиноОрдо.</p><dl class="profile-data"><div><dt>Имя пользователя</dt><dd>${esc(user.username)}</dd></div><div><dt>Email</dt><dd>${esc(user.email || 'Не указан')}</dd></div><div><dt>Дата регистрации</dt><dd>${esc(joined)}</dd></div></dl><section class="profile-email" aria-labelledby="email-change-title"><h2 id="email-change-title">Изменить email</h2><p>Новый адрес будет сохранён только после перехода по ссылке из письма.</p><form id="email-change-form" novalidate><label>Новый email<input class="field" name="email" type="email" autocomplete="email" required placeholder="new@example.com"></label><div id="email-change-message" role="status" aria-live="polite"></div><button class="btn secondary" type="submit">Отправить подтверждение</button></form></section><div class="profile-actions"><a class="btn" href="#/favorites">Открыть избранное</a><a class="btn secondary" href="#/catalog">Перейти в каталог</a></div></section>`;
+    const joined = new Intl.DateTimeFormat(language() === 'ky' ? 'ky-KG' : 'ru-RU', {day:'numeric', month:'long', year:'numeric'}).format(new Date(user.date_joined));
+    app.innerHTML = `<section class="profile-card"><div class="profile-avatar" aria-hidden="true">${esc(user.username.slice(0, 1).toUpperCase())}</div><div class="eyebrow">${t('personal_profile')}</div><h1>${esc(user.username)}</h1><p class="profile-intro">${t('profile_intro')}</p><dl class="profile-data"><div><dt>${t('username')}</dt><dd>${esc(user.username)}</dd></div><div><dt>Email</dt><dd>${esc(user.email || t('not_specified'))}</dd></div><div><dt>${t('registration_date')}</dt><dd>${esc(joined)}</dd></div></dl><section class="profile-email" aria-labelledby="email-change-title"><h2 id="email-change-title">${t('change_email')}</h2><p>${t('email_change_intro')}</p><form id="email-change-form" novalidate><label>${t('new_email')}<input class="field" name="email" type="email" autocomplete="email" required placeholder="new@example.com"></label><div id="email-change-message" role="status" aria-live="polite"></div><button class="btn secondary" type="submit">${t('send_confirmation')}</button></form></section><div class="profile-actions"><a class="btn" href="#/favorites">${t('open_favorites')}</a><a class="btn secondary" href="#/catalog">${t('go_catalog')}</a></div></section>`;
     const emailForm = document.querySelector('#email-change-form');
     emailForm.onsubmit = async event => {
       event.preventDefault();
@@ -641,7 +644,7 @@ async function profile() {
       button.disabled = true; message.innerHTML = '';
       try {
         const result = await api('/auth/email-change/request/', {method:'POST', body:JSON.stringify(Object.fromEntries(new FormData(emailForm)))});
-        message.innerHTML = `<div class="success">${esc(result.detail)}</div>`;
+        message.innerHTML = `<div class="success">${esc(translateServerMessage(result.detail))}</div>`;
         emailForm.reset();
       } catch (error) { formError(message, error); }
       finally { button.disabled = false; }
@@ -658,7 +661,7 @@ async function router() {
   window.pageController = new AbortController();
   window.pageSignal = window.pageController.signal;
   app.setAttribute('aria-busy', 'true');
-  app.innerHTML='<div class="loader" role="status"><span>Загружаем кино…</span></div>'; const [path, queryString = ''] = location.hash.replace(/^#\/?/,'').split('?'); const parts=path.split('/'); const routeParams = new URLSearchParams(queryString);
+  app.innerHTML=`<div class="loader" role="status"><span>${t('loading')}</span></div>`; const [path, queryString = ''] = location.hash.replace(/^#\/?/,'').split('?'); const parts=path.split('/'); const routeParams = new URLSearchParams(queryString);
   const route = parts[0] === 'movie' ? 'catalog' : (parts[0] || 'home');
   document.querySelectorAll('[data-route]').forEach(link => link.classList.toggle('active', link.dataset.route === route));
   try {
@@ -671,10 +674,22 @@ async function router() {
   }
 }
 
+function applyStaticTranslations() {
+  document.querySelectorAll('[data-i18n]').forEach(node => { node.textContent = t(node.dataset.i18n); });
+  document.querySelector('#main-nav')?.setAttribute('aria-label', t('main_navigation'));
+  document.querySelector('#legal-nav')?.setAttribute('aria-label', t('legal_navigation'));
+  const switcher = document.querySelector('#language-switcher');
+  switcher?.setAttribute('aria-label', t('language_switcher'));
+  switcher?.querySelectorAll('[data-language]').forEach(button => { const active = button.dataset.language === language(); button.classList.toggle('active', active); button.setAttribute('aria-pressed', String(active)); });
+}
+
+document.querySelectorAll('[data-language]').forEach(button => button.addEventListener('click', () => setLanguage(button.dataset.language)));
+window.addEventListener('kinoordo:languagechange', () => { applyStaticTranslations(); setAuthControls(); router(); });
+applyStaticTranslations();
 setAuthControls();
 window.addEventListener('hashchange', router);
-window.addEventListener('offline', () => toast('Соединение с интернетом потеряно'));
-window.addEventListener('online', () => toast('Соединение восстановлено'));
+window.addEventListener('offline', () => toast(t('offline')));
+window.addEventListener('online', () => toast(t('online')));
 app.addEventListener('error', event => replaceBrokenPoster(event.target), true);
 window.addEventListener('unhandledrejection', event => {
   event.preventDefault();
