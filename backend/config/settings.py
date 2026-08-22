@@ -72,6 +72,7 @@ REST_FRAMEWORK = {
 SPECTACULAR_SETTINGS = {"TITLE": "КиноОрдо API", "DESCRIPTION": "REST API каталога кыргызских фильмов", "VERSION": "1.0.0"}
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://127.0.0.1:3000")
+PUBLIC_SITE_URL = os.getenv("PUBLIC_SITE_URL", FRONTEND_URL).rstrip("/")
 PASSWORD_RESET_TIMEOUT = int(os.getenv("PASSWORD_RESET_TIMEOUT", "3600"))
 EMAIL_CONFIRMATION_TIMEOUT = int(os.getenv("EMAIL_CONFIRMATION_TIMEOUT", "86400"))
 EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")

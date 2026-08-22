@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{{ page_title }}</title>
+  <meta name="description" content="{{ description }}">
+  <meta name="robots" content="index,follow,max-image-preview:large">
+  <link rel="canonical" href="{{ canonical_url }}">
+  <meta property="og:type" content="video.movie">
+  <meta property="og:site_name" content="КиноОрдо">
+  <meta property="og:title" content="{{ page_title }}">
+  <meta property="og:description" content="{{ description }}">
+  <meta property="og:url" content="{{ canonical_url }}">
+  <meta property="og:image" content="{{ image_url }}">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{{ page_title }}">
+  <meta name="twitter:description" content="{{ description }}">
+  <meta name="twitter:image" content="{{ image_url }}">
+  <script type="application/ld+json">{{ structured_data|safe }}</script>
+  <style>
+    :root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;color:#f2f0ea;background:#101311}main{width:min(960px,calc(100% - 32px));margin:48px auto;display:grid;grid-template-columns:minmax(220px,320px) 1fr;gap:40px;align-items:start}.poster{width:100%;aspect-ratio:2/3;object-fit:cover;border-radius:22px;background:#1e231f}h1{margin:8px 0 14px;font-size:clamp(32px,5vw,58px)}.eyebrow{color:#b9805e;font-weight:700}.meta{color:#9da39c}.description{font-size:18px;line-height:1.7}.button{display:inline-block;margin-top:18px;padding:13px 22px;border-radius:999px;color:#17110e;background:#b9805e;text-decoration:none;font-weight:800}@media(max-width:700px){main{grid-template-columns:1fr}.poster{max-width:280px}}
+  </style>
+</head>
+<body>
+  <main>
+    {% if movie.poster %}<img class="poster" src="{{ movie.poster.url }}" alt="Постер фильма {{ movie.title }}">{% endif %}
+    <article>
+      <div class="eyebrow">{% for genre in movie.genres.all %}{{ genre.name }}{% if not forloop.last %} · {% endif %}{% endfor %}</div>
+      <h1>{{ movie.title }}</h1>
+      <p class="meta">{{ movie.year }} · {{ movie.country }} · {{ movie.duration }} мин · {{ movie.age_rating }}</p>
+      <p class="description">{{ movie.description }}</p>
+      {% if movie.director %}<p><strong>Режиссёр:</strong> {{ movie.director }}</p>{% endif %}
+      <a class="button" href="{{ frontend_url }}/#/movie/{{ movie.slug|urlencode }}">Открыть страницу фильма</a>
+    </article>
+  </main>
+</body>
+</html>

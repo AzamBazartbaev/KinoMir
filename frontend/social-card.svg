@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+  <title id="title">КиноОрдо</title>
+  <desc id="desc">Кыргыз киносу — кыргызское кино</desc>
+  <rect width="1200" height="630" fill="#101311"/>
+  <g fill="none" stroke="#b9805e" stroke-width="8" opacity=".3">
+    <path d="M0 85h1200M0 545h1200" stroke-dasharray="22 16"/>
+    <path d="M105 315l70-70 70 70-70 70zm850 0 70-70 70 70-70 70z"/>
+  </g>
+  <g transform="translate(515 150)">
+    <rect x="0" y="0" width="170" height="170" rx="30" fill="#171b18" stroke="#b9805e" stroke-width="8" transform="rotate(45 85 85)"/>
+    <circle cx="85" cy="85" r="47" fill="#b9805e"/>
+    <circle cx="85" cy="85" r="18" fill="#101311"/>
+  </g>
+  <text x="600" y="420" fill="#f2f0ea" font-family="Arial,sans-serif" font-size="82" font-weight="800" text-anchor="middle">КИНО<tspan fill="#b9805e">ОРДО</tspan></text>
+  <text x="600" y="485" fill="#9da39c" font-family="Arial,sans-serif" font-size="30" text-anchor="middle">Кыргыз тасмаларынын дүйнөсү</text>
+</svg>

@@ -28,6 +28,37 @@ class ApiTests(APITestCase):
         response = self.client.get("/api/movies/")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["count"], 1)
+
+    def test_published_movie_has_indexable_seo_page(self):
+        response = self.client.get("/films/test/")
+        content = response.content.decode()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("<title>Тест (2020) — КиноОрдо</title>", content)
+        self.assertIn('rel="canonical" href="http://127.0.0.1:3000/films/test/"', content)
+        self.assertIn('property="og:type" content="video.movie"', content)
+        self.assertIn('name="twitter:card" content="summary_large_image"', content)
+        self.assertIn('type="application/ld+json"', content)
+
+    def test_sitemap_contains_only_published_movies(self):
+        Movie.objects.create(title="Не опубликован", slug="not-published", description="x", year=2024, country="Кыргызстан", duration=90)
+        response = self.client.get("/sitemap.xml")
+        content = response.content.decode()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/xml; charset=utf-8")
+        self.assertIn("http://127.0.0.1:3000/films/test/", content)
+        self.assertNotIn("not-published", content)
+        self.assertEqual(self.client.get("/films/not-published/").status_code, 404)
+
+    def test_robots_points_to_sitemap_and_blocks_private_routes(self):
+        response = self.client.get("/robots.txt")
+        content = response.content.decode()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Disallow: /admin/", content)
+        self.assertIn("Disallow: /api/", content)
+        self.assertIn("Sitemap: http://127.0.0.1:3000/sitemap.xml", content)
     def test_favorite_toggle(self):
         self.assertTrue(self.client.post("/api/movies/test/favorite/").data["is_favorite"])
         self.assertFalse(self.client.post("/api/movies/test/favorite/").data["is_favorite"])
