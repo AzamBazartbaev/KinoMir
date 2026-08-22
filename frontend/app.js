@@ -388,7 +388,7 @@ async function catalog(params = new URLSearchParams()) {
     : `<div id="catalog-grid" class="collection-state"><strong>${t('nothing_found')}</strong><span>${t('nothing_found_text')}</span></div>`;
   const pagination = data.previous || data.next ? `<nav class="pagination" aria-label="${t('pages')}">${catalogLink(data.previous, t('back'))}<span>${t('page_of', {page,total:totalPages})}</span>${catalogLink(data.next, t('next'))}</nav>` : '';
 
-  app.innerHTML = `<section class="section catalog-section"><div class="section-head"><div><div class="eyebrow">${t('catalog_collection')}</div><h2>${t('catalog_title')}</h2></div><span class="catalog-summary">${t('found',{count:data.count})}</span></div><form class="filters" id="filters"><input class="field" name="q" value="${esc(query)}" placeholder="${t('search_placeholder')}"><select class="field" name="genre"><option value="">${t('all_genres')}</option>${genreOptions}</select><input class="field" name="year" type="number" min="1888" max="2100" value="${esc(year)}" placeholder="${t('year')}"><select class="field" name="sort">${sortOptions}</select><button class="btn">${t('apply')}</button><a class="filter-reset" href="#/catalog">${t('reset')}</a></form>${resultContent}${pagination}</section>`;
+  app.innerHTML = `<section class="section catalog-section"><div class="section-head"><div><div class="eyebrow">${t('catalog_collection')}</div><h1>${t('catalog_title')}</h1></div><span class="catalog-summary" id="catalog-summary" role="status" aria-live="polite">${t('found',{count:data.count})}</span></div><form class="filters" id="filters" aria-describedby="catalog-summary"><label class="sr-only" for="catalog-search">${t('filter_search')}</label><input class="field" id="catalog-search" name="q" value="${esc(query)}" placeholder="${t('search_placeholder')}"><label class="sr-only" for="catalog-genre">${t('filter_genre')}</label><select class="field" id="catalog-genre" name="genre"><option value="">${t('all_genres')}</option>${genreOptions}</select><label class="sr-only" for="catalog-year">${t('filter_year')}</label><input class="field" id="catalog-year" name="year" type="number" min="1888" max="2100" value="${esc(year)}" placeholder="${t('year')}"><label class="sr-only" for="catalog-sort">${t('filter_sort')}</label><select class="field" id="catalog-sort" name="sort">${sortOptions}</select><button class="btn" type="submit">${t('apply')}</button><a class="filter-reset" href="#/catalog">${t('reset')}</a></form>${resultContent}${pagination}</section>`;
   document.querySelector('#filters').addEventListener('submit', event => {
     event.preventDefault();
     const nextParams = new URLSearchParams(new FormData(event.currentTarget));
@@ -600,7 +600,7 @@ async function movie(slug) {
         <div><div><div class="social-label">${t('personal_rating')}</div><h2>${m.user_rating ? t('rating_of',{value:m.user_rating}) : t('not_rated')}</h2></div><div class="stars" id="rating-stars">${[1,2,3,4,5].map(n=>`<button type="button" data-rating="${n}" class="${n <= (m.user_rating || 0) ? 'active':''}" aria-label="${t('rating_of',{value:n})}" aria-pressed="${n === m.user_rating}">★</button>`).join('')}</div></div>
         ${guestNote}
       </section>
-      <section class="comments"><div class="comments-heading"><div><div class="eyebrow">${t('discussion')}</div><h2>${t('comments')}</h2></div><span id="comments-count">${m.comments.length}</span></div>${token()?`<form id="comment-form" novalidate><label for="comment-text">${t('your_comment')}</label><textarea class="field" id="comment-text" name="text" maxlength="1000" required placeholder="${t('comment_placeholder')}"></textarea><div class="comment-form-footer"><span id="comment-counter">0 / 1000</span><button class="btn" type="submit">${t('send')}</button></div><div id="comment-error" role="alert" aria-live="polite"></div></form>`:`<div class="comment-login-note"><a href="#/login">${t('login_to_discuss')}</a></div>`}<div id="comment-list">${comments}</div></section>
+      <section class="comments"><div class="comments-heading"><div><div class="eyebrow">${t('discussion')}</div><h2>${t('comments')}</h2></div><span id="comments-count" aria-label="${t('comments')}">${m.comments.length}</span></div>${token()?`<form id="comment-form" novalidate><label for="comment-text">${t('your_comment')}</label><textarea class="field" id="comment-text" name="text" maxlength="1000" required aria-describedby="comment-counter comment-error" placeholder="${t('comment_placeholder')}"></textarea><div class="comment-form-footer"><span id="comment-counter">0 / 1000</span><button class="btn" type="submit">${t('send')}</button></div><div id="comment-error" role="alert" aria-live="polite"></div></form>`:`<div class="comment-login-note"><a href="#/login">${t('login_to_discuss')}</a></div>`}<div id="comment-list">${comments}</div></section>
     </div>
   </article>`;
   initVideoPlayer(m);
@@ -682,15 +682,18 @@ function legalPage(kind) {
 function authPage(mode) {
   const register = mode === 'register';
   if (token()) { location.hash = '#/profile'; return; }
-  app.innerHTML = `<section class="auth-card"><div class="eyebrow">${t('account')}</div><h1>${t(register?'register':'login')}</h1><form id="auth-form" novalidate><label>${t('username')}<input class="field" name="username" minlength="3" maxlength="150" autocomplete="username" required placeholder="${t('username_example')}"></label>${register?'<label>Email<input class="field" name="email" type="email" autocomplete="email" required placeholder="name@example.com"></label>':''}<label>${t('password')}<input class="field" name="password" type="password" minlength="8" autocomplete="${register?'new-password':'current-password'}" required placeholder="${t('password_min')}"></label>${register?`<label>${t('repeat_password')}<input class="field" name="password_confirm" type="password" minlength="8" autocomplete="new-password" required placeholder="${t('repeat_password_hint')}"></label>`:''}<div id="auth-error" role="alert" aria-live="polite"></div><button class="btn" type="submit">${t(register?'create_account':'nav_login')}</button></form><p>${register?`${t('already_registered')} <a href="#/login">${t('nav_login')}</a>`:`${t('no_account')} <a href="#/register">${t('register')}</a><br><a href="#/password-reset">${t('forgot_password')}</a>`}</p></section>`;
+  app.innerHTML = `<section class="auth-card"><div class="eyebrow">${t('account')}</div><h1>${t(register?'register':'login')}</h1><form id="auth-form" novalidate><label for="auth-username">${t('username')}</label><input class="field" id="auth-username" name="username" minlength="3" maxlength="150" autocomplete="username" required aria-describedby="auth-error" placeholder="${t('username_example')}">${register?'<label for="auth-email">Email</label><input class="field" id="auth-email" name="email" type="email" autocomplete="email" required aria-describedby="auth-error" placeholder="name@example.com">':''}<label for="auth-password">${t('password')}</label><input class="field" id="auth-password" name="password" type="password" minlength="8" autocomplete="${register?'new-password':'current-password'}" required aria-describedby="auth-error" placeholder="${t('password_min')}">${register?`<label for="auth-password-confirm">${t('repeat_password')}</label><input class="field" id="auth-password-confirm" name="password_confirm" type="password" minlength="8" autocomplete="new-password" required aria-describedby="auth-error" placeholder="${t('repeat_password_hint')}">`:''}<div id="auth-error" role="alert" aria-live="polite"></div><button class="btn" type="submit">${t(register?'create_account':'nav_login')}</button></form><p>${register?`${t('already_registered')} <a href="#/login">${t('nav_login')}</a>`:`${t('no_account')} <a href="#/register">${t('register')}</a><br><a href="#/password-reset">${t('forgot_password')}</a>`}</p></section>`;
   document.querySelector('#auth-form').onsubmit = async e => {
     e.preventDefault();
     const form = e.target;
     const errorNode = document.querySelector('#auth-error');
+    form.querySelectorAll('input').forEach(input => input.removeAttribute('aria-invalid'));
     if (!form.reportValidity()) return;
     const body = Object.fromEntries(new FormData(form));
     if (register && body.password !== body.password_confirm) {
       errorNode.innerHTML = `<div class="error">${t('passwords_mismatch')}</div>`;
+      form.elements.password_confirm.setAttribute('aria-invalid', 'true');
+      form.elements.password_confirm.focus();
       return;
     }
     delete body.password_confirm;
@@ -705,6 +708,7 @@ function authPage(mode) {
       toast(t(register ? 'account_created' : 'logged_in'));
     } catch (error) {
       const messages = error.messages || [error.message];
+      form.querySelectorAll('input').forEach(input => input.setAttribute('aria-invalid', 'true'));
       errorNode.innerHTML = `<div class="error"><strong>${t('check_data')}</strong><ul>${messages.map(message => `<li>${esc(translateServerMessage(message))}</li>`).join('')}</ul></div>`;
     } finally {
       button.disabled = false;
@@ -718,7 +722,7 @@ function formError(node, error) {
 }
 
 function passwordResetRequestPage() {
-  app.innerHTML = `<section class="auth-card"><div class="eyebrow">${t('account_security')}</div><h1>${t('reset_password')}</h1><p>${t('reset_intro')}</p><form id="password-reset-request-form" novalidate><label>Email<input class="field" name="email" type="email" autocomplete="email" required placeholder="name@example.com"></label><div id="account-form-message" role="status" aria-live="polite"></div><button class="btn" type="submit">${t('send_instruction')}</button></form><p><a href="#/login">${t('return_login')}</a></p></section>`;
+  app.innerHTML = `<section class="auth-card"><div class="eyebrow">${t('account_security')}</div><h1>${t('reset_password')}</h1><p>${t('reset_intro')}</p><form id="password-reset-request-form" novalidate><label for="reset-email">Email</label><input class="field" id="reset-email" name="email" type="email" autocomplete="email" required aria-describedby="account-form-message" placeholder="name@example.com"><div id="account-form-message" role="status" aria-live="polite"></div><button class="btn" type="submit">${t('send_instruction')}</button></form><p><a href="#/login">${t('return_login')}</a></p></section>`;
   const form = document.querySelector('#password-reset-request-form');
   form.onsubmit = async event => {
     event.preventDefault();
@@ -737,7 +741,7 @@ function passwordResetRequestPage() {
 
 function passwordResetConfirmPage(params) {
   const resetToken = params.get('token') || '';
-  app.innerHTML = `<section class="auth-card"><div class="eyebrow">${t('account_security')}</div><h1>${t('new_password')}</h1>${resetToken ? `<form id="password-reset-confirm-form" novalidate><label>${t('new_password')}<input class="field" name="password" type="password" minlength="8" autocomplete="new-password" required></label><label>${t('repeat_password')}<input class="field" name="password_confirm" type="password" minlength="8" autocomplete="new-password" required></label><div id="account-form-message" role="alert" aria-live="polite"></div><button class="btn" type="submit">${t('change_password')}</button></form>` : `<div class="error">${t('missing_reset_token')}</div>`}<p><a href="#/login">${t('return_login')}</a></p></section>`;
+  app.innerHTML = `<section class="auth-card"><div class="eyebrow">${t('account_security')}</div><h1>${t('new_password')}</h1>${resetToken ? `<form id="password-reset-confirm-form" novalidate><label for="new-password">${t('new_password')}</label><input class="field" id="new-password" name="password" type="password" minlength="8" autocomplete="new-password" required aria-describedby="account-form-message"><label for="new-password-confirm">${t('repeat_password')}</label><input class="field" id="new-password-confirm" name="password_confirm" type="password" minlength="8" autocomplete="new-password" required aria-describedby="account-form-message"><div id="account-form-message" role="alert" aria-live="polite"></div><button class="btn" type="submit">${t('change_password')}</button></form>` : `<div class="error">${t('missing_reset_token')}</div>`}<p><a href="#/login">${t('return_login')}</a></p></section>`;
   const form = document.querySelector('#password-reset-confirm-form');
   if (!form) return;
   form.onsubmit = async event => {
@@ -745,7 +749,7 @@ function passwordResetConfirmPage(params) {
     if (!form.reportValidity()) return;
     const body = Object.fromEntries(new FormData(form));
     const message = document.querySelector('#account-form-message');
-    if (body.password !== body.password_confirm) { message.innerHTML = `<div class="error">${t('passwords_mismatch')}</div>`; return; }
+    if (body.password !== body.password_confirm) { message.innerHTML = `<div class="error">${t('passwords_mismatch')}</div>`; form.elements.password_confirm.setAttribute('aria-invalid', 'true'); form.elements.password_confirm.focus(); return; }
     const button = form.querySelector('button'); button.disabled = true; message.innerHTML = '';
     try {
       const result = await api('/auth/password-reset/confirm/', {method:'POST', body:JSON.stringify({...body, token:resetToken})});
@@ -773,7 +777,7 @@ function emailConfirmPage(params) {
 
 async function favorites() {
   if (!token()) return location.hash='#/login';
-  const movies=await api('/favorites/'); app.innerHTML=`<section class="section"><div class="section-head"><h2>${t('nav_favorites')}</h2></div><div class="grid">${movies.length?movies.map(movie => movieCard(movie)).join(''):`<div class="empty">${t('favorites_empty')}</div>`}</div></section>`;
+  const movies=await api('/favorites/'); app.innerHTML=`<section class="section"><div class="section-head"><h1>${t('nav_favorites')}</h1></div><div class="grid">${movies.length?movies.map(movieCard).join(''):`<div class="empty">${t('favorites_empty')}</div>`}</div></section>`;
 }
 
 async function profile() {
@@ -781,7 +785,7 @@ async function profile() {
   try {
     const user = await api('/auth/me/');
     const joined = new Intl.DateTimeFormat(language() === 'ky' ? 'ky-KG' : 'ru-RU', {day:'numeric', month:'long', year:'numeric'}).format(new Date(user.date_joined));
-    app.innerHTML = `<section class="profile-card"><div class="profile-avatar" aria-hidden="true">${esc(user.username.slice(0, 1).toUpperCase())}</div><div class="eyebrow">${t('personal_profile')}</div><h1>${esc(user.username)}</h1><p class="profile-intro">${t('profile_intro')}</p><dl class="profile-data"><div><dt>${t('username')}</dt><dd>${esc(user.username)}</dd></div><div><dt>Email</dt><dd>${esc(user.email || t('not_specified'))}</dd></div><div><dt>${t('registration_date')}</dt><dd>${esc(joined)}</dd></div></dl><section class="profile-email" aria-labelledby="email-change-title"><h2 id="email-change-title">${t('change_email')}</h2><p>${t('email_change_intro')}</p><form id="email-change-form" novalidate><label>${t('new_email')}<input class="field" name="email" type="email" autocomplete="email" required placeholder="new@example.com"></label><div id="email-change-message" role="status" aria-live="polite"></div><button class="btn secondary" type="submit">${t('send_confirmation')}</button></form></section><div class="profile-actions"><a class="btn" href="#/favorites">${t('open_favorites')}</a><a class="btn secondary" href="#/catalog">${t('go_catalog')}</a></div></section>`;
+    app.innerHTML = `<section class="profile-card"><div class="profile-avatar" aria-hidden="true">${esc(user.username.slice(0, 1).toUpperCase())}</div><div class="eyebrow">${t('personal_profile')}</div><h1>${esc(user.username)}</h1><p class="profile-intro">${t('profile_intro')}</p><dl class="profile-data"><div><dt>${t('username')}</dt><dd>${esc(user.username)}</dd></div><div><dt>Email</dt><dd>${esc(user.email || t('not_specified'))}</dd></div><div><dt>${t('registration_date')}</dt><dd>${esc(joined)}</dd></div></dl><section class="profile-email" aria-labelledby="email-change-title"><h2 id="email-change-title">${t('change_email')}</h2><p>${t('email_change_intro')}</p><form id="email-change-form" novalidate><label for="profile-email">${t('new_email')}</label><input class="field" id="profile-email" name="email" type="email" autocomplete="email" required aria-describedby="email-change-message" placeholder="new@example.com"><div id="email-change-message" role="status" aria-live="polite"></div><button class="btn secondary" type="submit">${t('send_confirmation')}</button></form></section><div class="profile-actions"><a class="btn" href="#/favorites">${t('open_favorites')}</a><a class="btn secondary" href="#/catalog">${t('go_catalog')}</a></div></section>`;
     const emailForm = document.querySelector('#email-change-form');
     emailForm.onsubmit = async event => {
       event.preventDefault();
@@ -802,6 +806,7 @@ async function profile() {
 }
 
 async function router() {
+  const isSpaNavigation = Boolean(window.routeReady);
   window.playerController?.abort();
   window.pageController?.abort();
   window.pageController = new AbortController();
@@ -814,15 +819,25 @@ async function router() {
   if (!hasInitialHomeShell) app.innerHTML=`<div class="loader" role="status"><span>${t('loading')}</span></div>`;
   applyRouteSeo(parts[0], routeParams);
   const route = parts[0] === 'movie' ? 'catalog' : (parts[0] || 'home');
-  document.querySelectorAll('[data-route]').forEach(link => link.classList.toggle('active', link.dataset.route === route));
+  document.querySelectorAll('[data-route]').forEach(link => {
+    const active = link.dataset.route === route;
+    link.classList.toggle('active', active);
+    if (active) link.setAttribute('aria-current', 'page');
+    else link.removeAttribute('aria-current');
+  });
   try {
     if(parts[0]==='catalog') await catalog(routeParams); else if(parts[0]==='movie') await movie(decodeURIComponent(parts[1])); else if(parts[0]==='login'||parts[0]==='register') authPage(parts[0]); else if(parts[0]==='password-reset') passwordResetRequestPage(); else if(parts[0]==='password-reset-confirm') passwordResetConfirmPage(routeParams); else if(parts[0]==='email-confirm') emailConfirmPage(routeParams); else if(parts[0]==='favorites') await favorites(); else if(parts[0]==='profile') await profile(); else if(parts[0]==='rights-holders'||parts[0]==='takedown-policy') legalPage(parts[0]); else await home();
     app.removeAttribute('aria-busy');
+    window.scrollTo(0, 0);
+    if (isSpaNavigation) app.focus({preventScroll:true});
     window.routeReady = true;
-    app.focus();
+    const pageHeading = app.querySelector('h1, h2');
+    const announcer = document.querySelector('#route-announcer');
+    if (announcer) announcer.textContent = pageHeading?.textContent?.trim() || document.title;
   } catch(error) {
     if (error.name === 'AbortError') return;
     renderPageError(error);
+    app.focus({preventScroll:true});
   }
 }
 
@@ -836,6 +851,7 @@ function applyStaticTranslations() {
 }
 
 document.querySelectorAll('[data-language]').forEach(button => button.addEventListener('click', () => setLanguage(button.dataset.language)));
+document.querySelector('#skip-link')?.addEventListener('click', event => { event.preventDefault(); app.focus(); });
 window.addEventListener('kinoordo:languagechange', () => { applyStaticTranslations(); setAuthControls(); router(); });
 applyStaticTranslations();
 setAuthControls();
