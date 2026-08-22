@@ -10,7 +10,7 @@ INSTALLED_APPS = [
     "django.contrib.admin", "django.contrib.auth", "django.contrib.contenttypes",
     "django.contrib.sessions", "django.contrib.messages", "django.contrib.staticfiles",
     "corsheaders", "rest_framework", "rest_framework.authtoken", "drf_spectacular", "django_prometheus",
-    "apps.movies",
+    "apps.accounts", "apps.movies",
 ]
 MIDDLEWARE = [
     "django_prometheus.middleware.PrometheusBeforeMiddleware",
@@ -64,10 +64,25 @@ REST_FRAMEWORK = {
         "login": os.getenv("DRF_THROTTLE_LOGIN_RATE", "5/min"),
         "register": os.getenv("DRF_THROTTLE_REGISTER_RATE", "3/hour"),
         "comments": os.getenv("DRF_THROTTLE_COMMENTS_RATE", "10/min"),
+        "password_reset": os.getenv("DRF_THROTTLE_PASSWORD_RESET_RATE", "5/hour"),
+        "email_change": os.getenv("DRF_THROTTLE_EMAIL_CHANGE_RATE", "5/hour"),
     },
     "NUM_PROXIES": int(os.getenv("DRF_NUM_PROXIES", "0")) or None,
 }
 SPECTACULAR_SETTINGS = {"TITLE": "КиноОрдо API", "DESCRIPTION": "REST API каталога кыргызских фильмов", "VERSION": "1.0.0"}
+
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://127.0.0.1:3000")
+PASSWORD_RESET_TIMEOUT = int(os.getenv("PASSWORD_RESET_TIMEOUT", "3600"))
+EMAIL_CONFIRMATION_TIMEOUT = int(os.getenv("EMAIL_CONFIRMATION_TIMEOUT", "86400"))
+EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "КиноОрдо <noreply@localhost>")
+EMAIL_HOST = os.getenv("EMAIL_HOST", "localhost")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", "25"))
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "False").lower() == "true"
+EMAIL_USE_SSL = os.getenv("EMAIL_USE_SSL", "False").lower() == "true"
+EMAIL_TIMEOUT = int(os.getenv("EMAIL_TIMEOUT", "10"))
 
 LOGGING = {
     "version": 1,
